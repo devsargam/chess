@@ -1,4 +1,6 @@
 "use client";
+import { useState, useMemo, useCallback } from "react";
+import { Chess, type Square } from "chess.js";
 import { Chessboard } from "react-chessboard";
 
 interface GameProps {
@@ -23,6 +25,102 @@ export function Game({
   onBackToLobby,
 }: GameProps) {
   const isMyTurn = currentTurn === playerColor && !gameOver;
+  const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
+
+  // Client-side chess instance to compute legal moves
+  const chess = useMemo(() => new Chess(fen), [fen]);
+
+  const legalMoves = useMemo(() => {
+    if (!selectedSquare || !isMyTurn) return [];
+    return chess.moves({ square: selectedSquare, verbose: true });
+  }, [chess, selectedSquare, isMyTurn]);
+
+  // Build highlight styles for selected square + legal move targets
+  const squareStyles = useMemo(() => {
+    const styles: Record<string, React.CSSProperties> = {};
+
+    if (selectedSquare && isMyTurn) {
+      styles[selectedSquare] = {
+        backgroundColor: "rgba(255, 255, 0, 0.4)",
+      };
+
+      for (const move of legalMoves) {
+        if (move.captured) {
+          // Capture: ring highlight
+          styles[move.to] = {
+            background:
+              "radial-gradient(transparent 55%, rgba(0,0,0,0.3) 55%)",
+          };
+        } else {
+          // Quiet move: dot
+          styles[move.to] = {
+            background:
+              "radial-gradient(rgba(0,0,0,0.25) 22%, transparent 22%)",
+          };
+        }
+      }
+    }
+
+    return styles;
+  }, [selectedSquare, legalMoves, isMyTurn]);
+
+  const handleSquareClick = useCallback(
+    ({ square }: { square: string }) => {
+      if (!isMyTurn) return;
+      const sq = square as Square;
+
+      // If a piece is selected and this square is a legal target, make the move
+      if (selectedSquare) {
+        const move = legalMoves.find((m) => m.to === sq);
+        if (move) {
+          onMove(selectedSquare, sq, move.promotion);
+          setSelectedSquare(null);
+          return;
+        }
+      }
+
+      // Select this square if it has one of our pieces
+      const piece = chess.get(sq);
+      const myColorChar = playerColor === "white" ? "w" : "b";
+      if (piece && piece.color === myColorChar) {
+        setSelectedSquare(sq);
+      } else {
+        setSelectedSquare(null);
+      }
+    },
+    [isMyTurn, selectedSquare, legalMoves, chess, playerColor, onMove],
+  );
+
+  const handlePieceDrop = useCallback(
+    ({
+      sourceSquare,
+      targetSquare,
+    }: {
+      sourceSquare: string;
+      targetSquare: string | null;
+    }) => {
+      if (!targetSquare || !isMyTurn) return false;
+
+      // Validate via our local chess instance
+      const localChess = new Chess(fen);
+      const result = localChess.move({ from: sourceSquare, to: targetSquare, promotion: "q" });
+      if (!result) return false;
+
+      onMove(sourceSquare, targetSquare, result.promotion || undefined);
+      setSelectedSquare(null);
+      return true;
+    },
+    [isMyTurn, fen, onMove],
+  );
+
+  // Clear selection when fen changes (opponent moved)
+  const handlePieceClick = useCallback(
+    ({ square }: { square: string | null }) => {
+      if (!square) return;
+      handleSquareClick({ square });
+    },
+    [handleSquareClick],
+  );
 
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center bg-zinc-950 p-4 lg:flex-row lg:gap-8 lg:p-8">
@@ -44,11 +142,10 @@ export function Game({
             position: fen,
             boardOrientation: playerColor,
             allowDragging: isMyTurn,
-            onPieceDrop: ({ sourceSquare, targetSquare }) => {
-              if (!targetSquare || !isMyTurn) return false;
-              onMove(sourceSquare, targetSquare);
-              return true;
-            },
+            squareStyles,
+            onSquareClick: handleSquareClick,
+            onPieceClick: handlePieceClick,
+            onPieceDrop: handlePieceDrop,
           }}
         />
       </div>
