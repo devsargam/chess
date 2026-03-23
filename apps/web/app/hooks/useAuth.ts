@@ -1,7 +1,10 @@
 "use client";
 import { useState, useCallback } from "react";
 
-const API_URL = "http://localhost:4000";
+const API_URL =
+  process.env.NODE_ENV === "production"
+    ? "https://api.chess.sarg.am"
+    : "http://localhost:4000";
 
 export function useAuth() {
   const [token, setToken] = useState<string | null>(null);
