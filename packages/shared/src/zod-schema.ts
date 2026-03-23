@@ -10,4 +10,9 @@ const login = z.object({
   password: z.string().min(6).max(100),
 });
 
-export { signup, login };
+const websocketMessage = z.object({
+  type: z.string(),
+  payload: z.object().optional(),
+});
+
+export { signup, login, websocketMessage };
