@@ -3,7 +3,7 @@ import { node } from "@elysiajs/node";
 import * as schema from "@repo/shared/zod-schema";
 import { signJwt } from "./lib/jwt";
 import { authPlugin } from "./auth";
-import { userStore, UserRecord } from "@repo/db";
+import { userStore } from "@repo/db";
 import { cors } from "@elysiajs/cors";
 
 const app = new Elysia({ adapter: node() })
@@ -11,18 +11,18 @@ const app = new Elysia({ adapter: node() })
   .get("/", () => "Hello Elysia");
 
 // Signup Route
-app.post("/signup", (req) => {
+app.post("/signup", async (req) => {
   const { success, data } = schema.signup.safeParse(req.body);
   if (!success) {
     return { error: "Invalid input" };
   }
 
-  const existingUser = userStore.findByUsername(data.username);
+  const existingUser = await userStore.findByUsername(data.username);
   if (existingUser) {
     return { error: "User already exists" };
   }
 
-  userStore.createUser(data.username, data.password);
+  await userStore.createUser(data.username, data.password);
 
   const token = signJwt({ email: data.username });
 
@@ -35,13 +35,13 @@ app.post("/signup", (req) => {
 });
 
 // Login Route
-app.post("/login", (req) => {
+app.post("/login", async (req) => {
   const { success, data } = schema.login.safeParse(req.body);
   if (!success) {
     return { error: "Invalid input" };
   }
 
-  const user = userStore.verifyUser(data.username, data.password);
+  const user = await userStore.verifyUser(data.username, data.password);
   if (!user) {
     return { error: "Invalid credentials" };
   }

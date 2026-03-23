@@ -1,3 +1,5 @@
+import { redis } from "./redis";
+
 type PieceColor = "white" | "black";
 
 type GameStatus = "waiting" | "active" | "completed" | "abandoned";
@@ -12,7 +14,7 @@ interface Move {
   to: string;
   san: string;
   playerId: string;
-  timestamp: Date;
+  timestamp: string;
 }
 
 interface GameRecord {
@@ -24,24 +26,23 @@ interface GameRecord {
   fen: string;
   winner: string | null;
   endReason: string | null;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: string;
+  updatedAt: string;
 }
 
+const GAME_KEY = (id: string) => `game:${id}`;
+
 class GameStore {
-  private static instance: GameStore;
-  private games: Map<string, GameRecord> = new Map();
-
-  private constructor() {}
-
-  static getInstance(): GameStore {
-    if (!GameStore.instance) {
-      GameStore.instance = new GameStore();
-    }
-    return GameStore.instance;
+  private async getGame(gameId: string): Promise<GameRecord | null> {
+    const data = await redis.get(GAME_KEY(gameId));
+    return data ? JSON.parse(data) : null;
   }
 
-  createGame(playerId: string): GameRecord {
+  private async saveGame(game: GameRecord): Promise<void> {
+    await redis.set(GAME_KEY(game.id), JSON.stringify(game));
+  }
+
+  async createGame(playerId: string): Promise<GameRecord> {
     const game: GameRecord = {
       id: crypto.randomUUID(),
       players: [{ id: playerId, color: "white" }],
@@ -51,42 +52,48 @@ class GameStore {
       fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
       winner: null,
       endReason: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
 
-    this.games.set(game.id, game);
+    await this.saveGame(game);
     return game;
   }
 
-  joinGame(gameId: string, playerId: string): GameRecord {
-    const game = this.games.get(gameId);
+  async joinGame(gameId: string, playerId: string): Promise<GameRecord> {
+    const game = await this.getGame(gameId);
     if (!game) throw new Error("Game not found");
-    if (game.status !== "waiting") throw new Error("Game is not accepting players");
+    if (game.status !== "waiting")
+      throw new Error("Game is not accepting players");
     if (game.players.length >= 2) throw new Error("Game is full");
-    if (game.players.some((p) => p.id === playerId)) throw new Error("Already in this game");
+    if (game.players.some((p) => p.id === playerId))
+      throw new Error("Already in this game");
 
     game.players.push({ id: playerId, color: "black" });
     game.status = "active";
-    game.updatedAt = new Date();
+    game.updatedAt = new Date().toISOString();
+    await this.saveGame(game);
     return game;
   }
 
-  getPlayerColor(gameId: string, playerId: string): PieceColor | null {
-    const game = this.games.get(gameId);
+  async getPlayerColor(
+    gameId: string,
+    playerId: string,
+  ): Promise<PieceColor | null> {
+    const game = await this.getGame(gameId);
     if (!game) return null;
     const player = game.players.find((p) => p.id === playerId);
     return player?.color ?? null;
   }
 
-  addMove(
+  async addMove(
     gameId: string,
     playerId: string,
     move: { from: string; to: string; promotion?: string },
     san: string,
     fen: string,
-  ): GameRecord {
-    const game = this.games.get(gameId);
+  ): Promise<GameRecord> {
+    const game = await this.getGame(gameId);
     if (!game) throw new Error("Game not found");
     if (game.status !== "active") throw new Error("Game is not active");
 
@@ -95,27 +102,33 @@ class GameStore {
       to: move.to,
       san,
       playerId,
-      timestamp: new Date(),
+      timestamp: new Date().toISOString(),
     });
     game.fen = fen;
     game.currentTurn = game.currentTurn === "white" ? "black" : "white";
-    game.updatedAt = new Date();
+    game.updatedAt = new Date().toISOString();
+    await this.saveGame(game);
     return game;
   }
 
-  endGame(gameId: string, winner: string | null, reason: string): GameRecord {
-    const game = this.games.get(gameId);
+  async endGame(
+    gameId: string,
+    winner: string | null,
+    reason: string,
+  ): Promise<GameRecord> {
+    const game = await this.getGame(gameId);
     if (!game) throw new Error("Game not found");
 
     game.status = "completed";
     game.winner = winner;
     game.endReason = reason;
-    game.updatedAt = new Date();
+    game.updatedAt = new Date().toISOString();
+    await this.saveGame(game);
     return game;
   }
 
-  resign(gameId: string, playerId: string): GameRecord {
-    const game = this.games.get(gameId);
+  async resign(gameId: string, playerId: string): Promise<GameRecord> {
+    const game = await this.getGame(gameId);
     if (!game) throw new Error("Game not found");
     if (game.status !== "active") throw new Error("Game is not active");
 
@@ -125,18 +138,10 @@ class GameStore {
     return this.endGame(gameId, opponent.id, "resign");
   }
 
-  findById(id: string): GameRecord | undefined {
-    return this.games.get(id);
-  }
-
-  listGames(): GameRecord[] {
-    return [...this.games.values()];
-  }
-
-  listOpenGames(): GameRecord[] {
-    return [...this.games.values()].filter((g) => g.status === "waiting");
+  async findById(id: string): Promise<GameRecord | null> {
+    return this.getGame(id);
   }
 }
 
-export const gameStore = GameStore.getInstance();
+export const gameStore = new GameStore();
 export type { GameRecord, Player, Move, PieceColor, GameStatus };

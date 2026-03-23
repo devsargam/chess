@@ -1,59 +1,56 @@
+import { redis } from "./redis";
+
 interface UserRecord {
   id: string;
   username: string;
   password: string;
-  createdAt: Date;
+  createdAt: string;
 }
 
+const USER_KEY = (id: string) => `user:${id}`;
+const USERNAME_INDEX = (username: string) => `user:username:${username}`;
+
 class UserStore {
-  private static instance: UserStore;
-  private users: Map<string, UserRecord> = new Map();
-
-  private constructor() {}
-
-  static getInstance(): UserStore {
-    if (!UserStore.instance) {
-      UserStore.instance = new UserStore();
-    }
-    return UserStore.instance;
-  }
-
-  createUser(username: string, password: string): UserRecord {
-    if (this.findByUsername(username)) {
-      throw new Error("User already exists");
-    }
+  async createUser(username: string, password: string): Promise<UserRecord> {
+    const existing = await this.findByUsername(username);
+    if (existing) throw new Error("User already exists");
 
     const user: UserRecord = {
       id: crypto.randomUUID(),
       username,
       password,
-      createdAt: new Date(),
+      createdAt: new Date().toISOString(),
     };
 
-    this.users.set(user.id, user);
+    await redis
+      .pipeline()
+      .set(USER_KEY(user.id), JSON.stringify(user))
+      .set(USERNAME_INDEX(username), user.id)
+      .exec();
+
     return user;
   }
 
-  findById(id: string): UserRecord | undefined {
-    return this.users.get(id);
+  async findById(id: string): Promise<UserRecord | null> {
+    const data = await redis.get(USER_KEY(id));
+    return data ? JSON.parse(data) : null;
   }
 
-  findByUsername(username: string): UserRecord | undefined {
-    return [...this.users.values()].find((u) => u.username === username);
+  async findByUsername(username: string): Promise<UserRecord | null> {
+    const id = await redis.get(USERNAME_INDEX(username));
+    if (!id) return null;
+    return this.findById(id);
   }
 
-  verifyUser(username: string, password: string): UserRecord | null {
-    const user = this.findByUsername(username);
-    if (!user || user.password !== password) {
-      return null;
-    }
+  async verifyUser(
+    username: string,
+    password: string,
+  ): Promise<UserRecord | null> {
+    const user = await this.findByUsername(username);
+    if (!user || user.password !== password) return null;
     return user;
-  }
-
-  listUsers(): UserRecord[] {
-    return [...this.users.values()];
   }
 }
 
-export const userStore = UserStore.getInstance();
+export const userStore = new UserStore();
 export type { UserRecord };
