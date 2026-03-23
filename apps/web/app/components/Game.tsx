@@ -1,7 +1,8 @@
 "use client";
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { Chess, type Square } from "chess.js";
 import { Chessboard } from "react-chessboard";
+import confetti from "canvas-confetti";
 
 interface GameProps {
   gameId: string;
@@ -26,6 +27,35 @@ export function Game({
 }: GameProps) {
   const isMyTurn = currentTurn === playerColor && !gameOver;
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
+  const firedConfetti = useRef(false);
+
+  useEffect(() => {
+    if (gameOver?.reason === "checkmate" && !firedConfetti.current) {
+      firedConfetti.current = true;
+
+      const end = Date.now() + 2500;
+      const frame = () => {
+        confetti({
+          particleCount: 3,
+          angle: 60,
+          spread: 55,
+          origin: { x: 0, y: 0.7 },
+        });
+        confetti({
+          particleCount: 3,
+          angle: 120,
+          spread: 55,
+          origin: { x: 1, y: 0.7 },
+        });
+        if (Date.now() < end) requestAnimationFrame(frame);
+      };
+      frame();
+    }
+
+    if (!gameOver) {
+      firedConfetti.current = false;
+    }
+  }, [gameOver]);
 
   // Client-side chess instance to compute legal moves
   const chess = useMemo(() => new Chess(fen), [fen]);
