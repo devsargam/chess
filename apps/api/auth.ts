@@ -6,6 +6,7 @@ export const authPlugin = new Elysia({ name: "auth" })
     const header = request.headers.get("Authorization");
     const token = header?.startsWith("Bearer ") ? header.slice(7) : null;
     const user = token ? verifyJwt(token) : null;
+    console.log(user);
     return { user };
   })
   .onBeforeHandle(({ user, set }) => {
