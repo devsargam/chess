@@ -1,0 +1,13 @@
+{
+  "name": "@repo/db",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.ts",
+  "license": "MIT",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*"
+  }
+}

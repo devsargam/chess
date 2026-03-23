@@ -3,6 +3,7 @@ import { node } from "@elysiajs/node";
 import * as schema from "@repo/shared/zod-schema";
 import { signJwt } from "./lib/jwt";
 import { authPlugin } from "./auth";
+import { userStore, UserRecord } from "@repo/db";
 
 const app = new Elysia({ adapter: node() }).get("/", () => "Hello Elysia");
 
@@ -12,6 +13,13 @@ app.post("/signup", (req) => {
   if (!success) {
     return { error: "Invalid input" };
   }
+
+  const existingUser = userStore.findByUsername(data.username);
+  if (existingUser) {
+    return { error: "User already exists" };
+  }
+
+  userStore.createUser(data.username, data.password);
 
   const token = signJwt({ email: data.username });
 
@@ -28,6 +36,11 @@ app.post("/login", (req) => {
   const { success, data } = schema.login.safeParse(req.body);
   if (!success) {
     return { error: "Invalid input" };
+  }
+
+  const user = userStore.verifyUser(data.username, data.password);
+  if (!user) {
+    return { error: "Invalid credentials" };
   }
 
   const token = signJwt({ email: data.username });

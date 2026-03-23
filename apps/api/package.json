@@ -9,6 +9,7 @@
   "dependencies": {
     "@elysiajs/node": "^1.4.5",
     "@repo/shared": "workspace:*",
+    "@repo/db": "workspace:*",
     "@types/jsonwebtoken": "^9.0.10",
     "elysia": "^1.4.28",
     "jsonwebtoken": "^9.0.3"
