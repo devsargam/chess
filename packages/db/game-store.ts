@@ -10,7 +10,7 @@ interface Player {
 interface Move {
   from: string;
   to: string;
-  piece: string;
+  san: string;
   playerId: string;
   timestamp: Date;
 }
@@ -21,7 +21,9 @@ interface GameRecord {
   moves: Move[];
   status: GameStatus;
   currentTurn: PieceColor;
+  fen: string;
   winner: string | null;
+  endReason: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -46,7 +48,9 @@ class GameStore {
       moves: [],
       status: "waiting",
       currentTurn: "white",
+      fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
       winner: null,
+      endReason: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -68,15 +72,44 @@ class GameStore {
     return game;
   }
 
-  addMove(gameId: string, playerId: string, from: string, to: string, piece: string): GameRecord {
+  getPlayerColor(gameId: string, playerId: string): PieceColor | null {
+    const game = this.games.get(gameId);
+    if (!game) return null;
+    const player = game.players.find((p) => p.id === playerId);
+    return player?.color ?? null;
+  }
+
+  addMove(
+    gameId: string,
+    playerId: string,
+    move: { from: string; to: string; promotion?: string },
+    san: string,
+    fen: string,
+  ): GameRecord {
     const game = this.games.get(gameId);
     if (!game) throw new Error("Game not found");
     if (game.status !== "active") throw new Error("Game is not active");
 
-    // TODO: validate it's the player's turn, validate move legality
-
-    game.moves.push({ from, to, piece, playerId, timestamp: new Date() });
+    game.moves.push({
+      from: move.from,
+      to: move.to,
+      san,
+      playerId,
+      timestamp: new Date(),
+    });
+    game.fen = fen;
     game.currentTurn = game.currentTurn === "white" ? "black" : "white";
+    game.updatedAt = new Date();
+    return game;
+  }
+
+  endGame(gameId: string, winner: string | null, reason: string): GameRecord {
+    const game = this.games.get(gameId);
+    if (!game) throw new Error("Game not found");
+
+    game.status = "completed";
+    game.winner = winner;
+    game.endReason = reason;
     game.updatedAt = new Date();
     return game;
   }
@@ -89,10 +122,7 @@ class GameStore {
     const opponent = game.players.find((p) => p.id !== playerId);
     if (!opponent) throw new Error("No opponent found");
 
-    game.status = "completed";
-    game.winner = opponent.id;
-    game.updatedAt = new Date();
-    return game;
+    return this.endGame(gameId, opponent.id, "resign");
   }
 
   findById(id: string): GameRecord | undefined {
