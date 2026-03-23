@@ -1,8 +1,7 @@
 import { WebSocketServer } from "ws";
 import { websocketMessage } from "@repo/shared/zod-schema";
-import { userStore } from "@repo/db";
 import { verifyJwt, extractToken } from "./auth";
-import { handleMessage } from "./handlers";
+import { handleMessage, connections } from "./handlers";
 
 const wss = new WebSocketServer({ port: 8080 });
 
@@ -14,16 +13,24 @@ wss.on("connection", (ws, req) => {
 
   if (!decoded || typeof decoded === "string") return ws.close(1008, "Invalid token");
 
-  const username = (decoded as Record<string, unknown>).email as string;
-  const userRecord = username ? userStore.findByUsername(username) : undefined;
+  const payload = decoded as Record<string, unknown>;
+  const username = payload.email as string;
+  if (!username) return ws.close(1008, "Invalid token payload");
 
-  if (!userRecord) return ws.close(1008, "User not found");
+  // Use username as id since the user store lives in the API process
+  const user = { id: username, username };
 
-  const user = { id: userRecord.id, username: userRecord.username };
+  // Register this connection
+  connections.set(user.id, ws);
 
   console.log("Connected:", user);
 
   ws.on("error", console.error);
+
+  ws.on("close", () => {
+    connections.delete(user.id);
+    console.log("Disconnected:", user);
+  });
 
   ws.on("message", (raw) => {
     const { data, success } = websocketMessage.safeParse(

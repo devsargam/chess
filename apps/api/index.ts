@@ -4,8 +4,11 @@ import * as schema from "@repo/shared/zod-schema";
 import { signJwt } from "./lib/jwt";
 import { authPlugin } from "./auth";
 import { userStore, UserRecord } from "@repo/db";
+import { cors } from "@elysiajs/cors";
 
-const app = new Elysia({ adapter: node() }).get("/", () => "Hello Elysia");
+const app = new Elysia({ adapter: node() })
+  .use(cors())
+  .get("/", () => "Hello Elysia");
 
 // Signup Route
 app.post("/signup", (req) => {

@@ -12,7 +12,7 @@ const login = z.object({
 
 const websocketMessage = z.object({
   type: z.string(),
-  payload: z.object().optional(),
+  payload: z.record(z.string(), z.unknown()).optional(),
 });
 
 export { signup, login, websocketMessage };

@@ -8,6 +8,9 @@ interface AuthenticatedUser {
   username: string;
 }
 
+// userId -> WebSocket (managed by index.ts)
+export const connections = new Map<string, WebSocket>();
+
 // One Chess instance per active game, keyed by gameId
 const chessInstances = new Map<string, Chess>();
 
@@ -20,6 +23,20 @@ function getChess(gameId: string): Chess {
     chessInstances.set(gameId, chess);
   }
   return chess;
+}
+
+/** Send to all players in a game */
+function broadcast(gameId: string, type: string, payload: Record<string, unknown>) {
+  const game = gameStore.findById(gameId);
+  if (!game) return;
+
+  const msg = JSON.stringify({ type, payload });
+  for (const player of game.players) {
+    const ws = connections.get(player.id);
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(msg);
+    }
+  }
 }
 
 export const handleMessage = (
@@ -49,7 +66,6 @@ export const handleMessage = (
 function handleCreateRoom(ws: WebSocket, user: AuthenticatedUser) {
   try {
     const game = gameStore.createGame(user.id);
-    // Pre-create the chess instance for this game
     chessInstances.set(game.id, new Chess());
     send(ws, events.createRoom, { gameId: game.id });
   } catch (err) {
@@ -67,13 +83,13 @@ function handleJoinRoom(
     if (!gameId) return sendError(ws, "Missing gameId");
 
     const game = gameStore.joinGame(gameId, user.id);
-    send(ws, events.joinRoom, {
+
+    // Notify both players that the game is starting
+    broadcast(gameId, events.joinRoom, {
       gameId: game.id,
       status: game.status,
       fen: game.fen,
     });
-
-    // TODO: notify the other player that someone joined
   } catch (err) {
     sendError(ws, (err as Error).message);
   }
@@ -98,7 +114,6 @@ function handleMove(
     if (!game) return sendError(ws, "Game not found");
     if (game.status !== "active") return sendError(ws, "Game is not active");
 
-    // Verify it's this player's turn
     const playerColor = gameStore.getPlayerColor(gameId, user.id);
     if (!playerColor) return sendError(ws, "You are not in this game");
 
@@ -106,11 +121,9 @@ function handleMove(
     const expectedColor = chess.turn() === "w" ? "white" : "black";
     if (playerColor !== expectedColor) return sendError(ws, "Not your turn");
 
-    // Attempt the move via chess.js — validates legality
     const result = chess.move({ from, to, promotion });
     if (!result) return sendError(ws, "Illegal move");
 
-    // Persist in game store
     gameStore.addMove(gameId, user.id, { from, to, promotion }, result.san, chess.fen());
 
     const movePayload: Record<string, unknown> = {
@@ -125,14 +138,12 @@ function handleMove(
     if (result.captured) movePayload.captured = result.captured;
     if (chess.inCheck()) movePayload.inCheck = true;
 
-    // Check for game-over conditions
     if (chess.isGameOver()) {
       let winner: string | null = null;
       let reason: string;
 
       if (chess.isCheckmate()) {
         reason = "checkmate";
-        // The player who just moved wins
         winner = user.id;
       } else if (chess.isStalemate()) {
         reason = "stalemate";
@@ -150,9 +161,8 @@ function handleMove(
       movePayload.endReason = reason;
     }
 
-    send(ws, events.move, movePayload);
-
-    // TODO: broadcast move to opponent
+    // Broadcast move to both players
+    broadcast(gameId, events.move, movePayload);
   } catch (err) {
     sendError(ws, (err as Error).message);
   }
@@ -170,9 +180,8 @@ function handleResign(
     const game = gameStore.resign(gameId, user.id);
     chessInstances.delete(gameId);
 
-    send(ws, events.resign, { gameId: game.id, winner: game.winner, endReason: "resign" });
-
-    // TODO: notify opponent about resignation
+    // Notify both players
+    broadcast(gameId, events.resign, { gameId: game.id, winner: game.winner, endReason: "resign" });
   } catch (err) {
     sendError(ws, (err as Error).message);
   }
