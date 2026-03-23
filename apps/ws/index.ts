@@ -1,5 +1,6 @@
 import { WebSocketServer } from "ws";
 import { websocketMessage } from "@repo/shared/zod-schema";
+import { userStore } from "@repo/db";
 import { verifyJwt, extractToken } from "./auth";
 import { handleMessage } from "./handlers";
 
@@ -9,9 +10,16 @@ wss.on("connection", (ws, req) => {
   if (!req.url) return ws.close(1008, "Missing token");
 
   const token = extractToken(req.url);
-  const user = token ? verifyJwt(token) : null;
+  const decoded = token ? verifyJwt(token) : null;
 
-  if (!user) return ws.close(1008, "Invalid token");
+  if (!decoded || typeof decoded === "string") return ws.close(1008, "Invalid token");
+
+  const username = (decoded as Record<string, unknown>).email as string;
+  const userRecord = username ? userStore.findByUsername(username) : undefined;
+
+  if (!userRecord) return ws.close(1008, "User not found");
+
+  const user = { id: userRecord.id, username: userRecord.username };
 
   console.log("Connected:", user);
 
@@ -27,7 +35,7 @@ wss.on("connection", (ws, req) => {
       return;
     }
 
-    handleMessage(ws, data.type, data.payload);
+    handleMessage(ws, user, data.type, data.payload);
   });
 });
 

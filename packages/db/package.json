@@ -5,7 +5,8 @@
   "main": "index.ts",
   "license": "MIT",
   "exports": {
-    ".": "./index.ts"
+    ".": "./index.ts",
+    "./game-store": "./game-store.ts"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*"
