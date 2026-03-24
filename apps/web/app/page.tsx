@@ -6,6 +6,14 @@ import { useSocket } from "./hooks/useSocket";
 import { AuthForm } from "./components/AuthForm";
 import { Lobby } from "./components/Lobby";
 import { Game } from "./components/Game";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 
 type Screen = "auth" | "lobby" | "waiting" | "game";
 
@@ -13,6 +21,7 @@ const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 export default function Home() {
   const { token, username, error, loading, authenticate, logout } = useAuth();
+  const [copied, setCopied] = useState(false);
 
   const [screen, setScreen] = useState<Screen>("auth");
   const [gameId, setGameId] = useState<string | null>(null);
@@ -43,8 +52,6 @@ export default function Home() {
           setGameOver(null);
           setScreen("game");
 
-          // If we're the joiner, set up our state. If we're the creator
-          // (already have this gameId from create_room), keep our color.
           setGameId((prev) => {
             if (prev !== incomingGameId) {
               setPlayerColor("black");
@@ -83,15 +90,12 @@ export default function Home() {
 
   const { connected, send } = useSocket(token, handleWsMessage);
 
-  // Move to lobby once authenticated
   if (token && screen === "auth") {
     setScreen("lobby");
   }
 
   if (!token) {
-    return (
-      <AuthForm onAuth={authenticate} loading={loading} error={error} />
-    );
+    return <AuthForm onAuth={authenticate} loading={loading} error={error} />;
   }
 
   if (screen === "lobby") {
@@ -111,28 +115,69 @@ export default function Home() {
 
   if (screen === "waiting") {
     return (
-      <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-zinc-950 px-4">
-        <p className="text-lg text-white">Waiting for opponent...</p>
-        <p className="max-w-full break-all text-center font-mono text-sm text-zinc-400">
-          Room ID: {gameId}
-        </p>
-        <p className="text-xs text-zinc-500">
-          Share this ID with your opponent
-        </p>
-        <button
-          onClick={() => {
-            if (gameId) navigator.clipboard.writeText(gameId);
-          }}
-          className="rounded-lg bg-zinc-800 px-5 py-3 text-sm text-zinc-300 active:bg-zinc-700 hover:bg-zinc-700"
-        >
-          Copy Room ID
-        </button>
-        <button
-          onClick={() => setScreen("lobby")}
-          className="text-sm text-zinc-500 active:text-zinc-300 hover:text-zinc-300"
-        >
-          Back to Lobby
-        </button>
+      <div className="flex min-h-dvh items-center justify-center px-4">
+        <div className="pointer-events-none fixed inset-0 overflow-hidden">
+          <div className="absolute top-1/3 left-1/2 h-[500px] w-[500px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber/5 blur-[120px]" />
+        </div>
+
+        <div className="relative w-full max-w-sm">
+          <Card className="glow-amber border-border/50 bg-card/80 backdrop-blur-sm">
+            <CardHeader className="text-center">
+              <div className="animate-pulse-amber mb-2">
+                <span
+                  className="text-5xl select-none"
+                  style={{
+                    filter: "drop-shadow(0 0 20px oklch(0.78 0.12 75 / 30%))",
+                  }}
+                >
+                  ♔
+                </span>
+              </div>
+              <CardTitle className="text-xl">Waiting for opponent</CardTitle>
+              <CardDescription>
+                Share this room code with your opponent
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Room code display */}
+              <div
+                className="cursor-pointer rounded-lg border border-border/50 bg-background/50 p-4 text-center font-mono text-xs break-all text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground"
+                onClick={() => {
+                  if (gameId) {
+                    navigator.clipboard.writeText(gameId);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }
+                }}
+              >
+                {gameId}
+              </div>
+
+              <Button
+                variant="secondary"
+                className="h-11 w-full"
+                size="lg"
+                onClick={() => {
+                  if (gameId) {
+                    navigator.clipboard.writeText(gameId);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  }
+                }}
+              >
+                {copied ? "Copied!" : "Copy Room Code"}
+              </Button>
+
+              <Button
+                variant="ghost"
+                className="w-full text-muted-foreground"
+                onClick={() => setScreen("lobby")}
+              >
+                Back to Lobby
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     );
   }

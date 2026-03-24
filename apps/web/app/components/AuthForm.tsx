@@ -1,5 +1,14 @@
 "use client";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 
 interface AuthFormProps {
   onAuth: (
@@ -22,58 +31,89 @@ export function AuthForm({ onAuth, loading, error }: AuthFormProps) {
   };
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-zinc-950 px-4">
-      <form
-        onSubmit={handleSubmit}
-        className="w-full max-w-sm space-y-4 rounded-xl border border-zinc-800 bg-zinc-900 p-6 sm:p-8"
-      >
-        <h1 className="text-center text-2xl font-bold text-white">
-          {mode === "login" ? "Log In" : "Sign Up"}
-        </h1>
+    <div className="flex min-h-dvh items-center justify-center px-4">
+      {/* Ambient background glow */}
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute top-1/3 left-1/2 h-[500px] w-[500px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber/5 blur-[120px]" />
+      </div>
 
-        <input
-          type="text"
-          placeholder="Username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-3 text-base text-white placeholder-zinc-500 outline-none focus:border-blue-500"
-          required
-          minLength={2}
-        />
+      <div className="relative w-full max-w-sm">
+        {/* Chess piece decorative element */}
+        <div className="animate-float mb-6 text-center">
+          <span className="text-5xl opacity-60 select-none" style={{ filter: "drop-shadow(0 0 20px oklch(0.78 0.12 75 / 30%))" }}>
+            ♚
+          </span>
+        </div>
 
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-3 text-base text-white placeholder-zinc-500 outline-none focus:border-blue-500"
-          required
-          minLength={6}
-        />
+        <Card className="glow-amber border-border/50 bg-card/80 backdrop-blur-sm">
+          <CardHeader className="pb-2 text-center">
+            <CardTitle className="text-xl tracking-tight text-foreground">
+              {mode === "login" ? "Welcome back" : "Create account"}
+            </CardTitle>
+            <CardDescription>
+              {mode === "login"
+                ? "Sign in to continue playing"
+                : "Join the game in seconds"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-3">
+                <Input
+                  type="text"
+                  placeholder="Username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  className="h-11 bg-background/50"
+                  required
+                  minLength={2}
+                />
+                <Input
+                  type="password"
+                  placeholder="Password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="h-11 bg-background/50"
+                  required
+                  minLength={6}
+                />
+              </div>
 
-        {error && (
-          <p className="text-center text-sm text-red-400">{error}</p>
-        )}
+              {error && (
+                <p className="text-center text-sm text-destructive">{error}</p>
+              )}
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-lg bg-blue-600 py-3 font-medium text-white active:bg-blue-700 hover:bg-blue-700 disabled:opacity-50"
-        >
-          {loading ? "..." : mode === "login" ? "Log In" : "Sign Up"}
-        </button>
+              <Button
+                type="submit"
+                disabled={loading}
+                className="h-11 w-full text-sm font-semibold"
+                size="lg"
+              >
+                {loading ? (
+                  <span className="animate-pulse-amber">Connecting...</span>
+                ) : mode === "login" ? (
+                  "Sign In"
+                ) : (
+                  "Create Account"
+                )}
+              </Button>
 
-        <p className="text-center text-sm text-zinc-400">
-          {mode === "login" ? "No account? " : "Already have an account? "}
-          <button
-            type="button"
-            onClick={() => setMode(mode === "login" ? "signup" : "login")}
-            className="text-blue-400 hover:underline"
-          >
-            {mode === "login" ? "Sign Up" : "Log In"}
-          </button>
-        </p>
-      </form>
+              <div className="pt-1 text-center text-sm text-muted-foreground">
+                {mode === "login"
+                  ? "Don't have an account? "
+                  : "Already have an account? "}
+                <button
+                  type="button"
+                  onClick={() => setMode(mode === "login" ? "signup" : "login")}
+                  className="text-primary transition-colors hover:text-primary/80"
+                >
+                  {mode === "login" ? "Sign up" : "Sign in"}
+                </button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

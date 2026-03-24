@@ -3,6 +3,14 @@ import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { Chess, type Square } from "chess.js";
 import { Chessboard } from "react-chessboard";
 import confetti from "canvas-confetti";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
 interface GameProps {
   gameId: string;
@@ -32,32 +40,17 @@ export function Game({
   useEffect(() => {
     if (gameOver?.reason === "checkmate" && !firedConfetti.current) {
       firedConfetti.current = true;
-
       const end = Date.now() + 2500;
       const frame = () => {
-        confetti({
-          particleCount: 3,
-          angle: 60,
-          spread: 55,
-          origin: { x: 0, y: 0.7 },
-        });
-        confetti({
-          particleCount: 3,
-          angle: 120,
-          spread: 55,
-          origin: { x: 1, y: 0.7 },
-        });
+        confetti({ particleCount: 3, angle: 60, spread: 55, origin: { x: 0, y: 0.7 } });
+        confetti({ particleCount: 3, angle: 120, spread: 55, origin: { x: 1, y: 0.7 } });
         if (Date.now() < end) requestAnimationFrame(frame);
       };
       frame();
     }
-
-    if (!gameOver) {
-      firedConfetti.current = false;
-    }
+    if (!gameOver) firedConfetti.current = false;
   }, [gameOver]);
 
-  // Client-side chess instance to compute legal moves
   const chess = useMemo(() => new Chess(fen), [fen]);
 
   const legalMoves = useMemo(() => {
@@ -65,32 +58,16 @@ export function Game({
     return chess.moves({ square: selectedSquare, verbose: true });
   }, [chess, selectedSquare, isMyTurn]);
 
-  // Build highlight styles for selected square + legal move targets
   const squareStyles = useMemo(() => {
     const styles: Record<string, React.CSSProperties> = {};
-
     if (selectedSquare && isMyTurn) {
-      styles[selectedSquare] = {
-        backgroundColor: "rgba(255, 255, 0, 0.4)",
-      };
-
+      styles[selectedSquare] = { backgroundColor: "oklch(0.78 0.12 75 / 35%)" };
       for (const move of legalMoves) {
-        if (move.captured) {
-          // Capture: ring highlight
-          styles[move.to] = {
-            background:
-              "radial-gradient(transparent 55%, rgba(0,0,0,0.3) 55%)",
-          };
-        } else {
-          // Quiet move: dot
-          styles[move.to] = {
-            background:
-              "radial-gradient(rgba(0,0,0,0.25) 22%, transparent 22%)",
-          };
-        }
+        styles[move.to] = move.captured
+          ? { background: "radial-gradient(transparent 55%, oklch(0.78 0.12 75 / 30%) 55%)" }
+          : { background: "radial-gradient(oklch(0.78 0.12 75 / 30%) 22%, transparent 22%)" };
       }
     }
-
     return styles;
   }, [selectedSquare, legalMoves, isMyTurn]);
 
@@ -98,8 +75,6 @@ export function Game({
     ({ square }: { square: string }) => {
       if (!isMyTurn) return;
       const sq = square as Square;
-
-      // If a piece is selected and this square is a legal target, make the move
       if (selectedSquare) {
         const move = legalMoves.find((m) => m.to === sq);
         if (move) {
@@ -108,8 +83,6 @@ export function Game({
           return;
         }
       }
-
-      // Select this square if it has one of our pieces
       const piece = chess.get(sq);
       const myColorChar = playerColor === "white" ? "w" : "b";
       if (piece && piece.color === myColorChar) {
@@ -122,20 +95,11 @@ export function Game({
   );
 
   const handlePieceDrop = useCallback(
-    ({
-      sourceSquare,
-      targetSquare,
-    }: {
-      sourceSquare: string;
-      targetSquare: string | null;
-    }) => {
+    ({ sourceSquare, targetSquare }: { sourceSquare: string; targetSquare: string | null }) => {
       if (!targetSquare || !isMyTurn) return false;
-
-      // Validate via our local chess instance
       const localChess = new Chess(fen);
       const result = localChess.move({ from: sourceSquare, to: targetSquare, promotion: "q" });
       if (!result) return false;
-
       onMove(sourceSquare, targetSquare, result.promotion || undefined);
       setSelectedSquare(null);
       return true;
@@ -143,7 +107,6 @@ export function Game({
     [isMyTurn, fen, onMove],
   );
 
-  // Clear selection when fen changes (opponent moved)
   const handlePieceClick = useCallback(
     ({ square }: { square: string | null }) => {
       if (!square) return;
@@ -152,20 +115,26 @@ export function Game({
     [handleSquareClick],
   );
 
+  const moveCount = chess.moveNumber();
+
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center bg-zinc-950 p-4 lg:flex-row lg:gap-8 lg:p-8">
-      {/* Info bar — shown above board on mobile, hidden on desktop */}
-      <div className="mb-3 flex w-full max-w-[min(90vw,560px)] items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-2 lg:hidden">
-        <span className="text-sm font-medium text-white">{playerColor}</span>
-        <span
-          className={`text-sm font-medium ${currentTurn === playerColor ? "text-green-400" : "text-zinc-400"}`}
+    <div className="flex min-h-dvh flex-col items-center justify-center p-4 lg:flex-row lg:gap-6 lg:p-8">
+      {/* Mobile top bar */}
+      <div className="mb-3 flex w-full max-w-[min(90vw,560px)] items-center justify-between rounded-xl border border-border/50 bg-card/60 px-4 py-2.5 backdrop-blur-sm lg:hidden">
+        <div className="flex items-center gap-2">
+          <span className="text-lg select-none">{playerColor === "white" ? "♔" : "♚"}</span>
+          <span className="text-sm font-medium capitalize text-foreground">{playerColor}</span>
+        </div>
+        <Badge
+          variant={isMyTurn ? "default" : "secondary"}
+          className={isMyTurn ? "" : "text-muted-foreground"}
         >
           {isMyTurn ? "Your turn" : "Waiting..."}
-        </span>
+        </Badge>
       </div>
 
-      {/* Board — scales to viewport width on mobile */}
-      <div className="w-full max-w-[min(90vw,560px)]">
+      {/* Board */}
+      <div className="glow-amber w-full max-w-[min(90vw,560px)] overflow-hidden rounded-xl">
         <Chessboard
           options={{
             id: "game",
@@ -173,6 +142,8 @@ export function Game({
             boardOrientation: playerColor,
             allowDragging: isMyTurn,
             squareStyles,
+            darkSquareStyle: { backgroundColor: "#7A6652" },
+            lightSquareStyle: { backgroundColor: "#C8B898" },
             onSquareClick: handleSquareClick,
             onPieceClick: handlePieceClick,
             onPieceDrop: handlePieceDrop,
@@ -180,53 +151,73 @@ export function Game({
         />
       </div>
 
-      {/* Side panel — below board on mobile, beside it on desktop */}
-      <div className="mt-3 w-full max-w-[min(90vw,560px)] space-y-4 rounded-xl border border-zinc-800 bg-zinc-900 p-4 sm:p-6 lg:mt-0 lg:w-64">
-        {/* Full info — desktop only */}
-        <div className="hidden space-y-2 text-sm text-zinc-400 lg:block">
-          <h2 className="text-lg font-bold text-white">Game Info</h2>
-          <p>
-            Room:{" "}
-            <span className="font-mono text-zinc-300">
-              {gameId.slice(0, 8)}...
-            </span>
-          </p>
-          <p>
-            You play:{" "}
-            <span className="font-medium text-white">{playerColor}</span>
-          </p>
-          <p>
-            Turn:{" "}
-            <span
-              className={`font-medium ${currentTurn === playerColor ? "text-green-400" : "text-zinc-300"}`}
-            >
-              {currentTurn}
-              {currentTurn === playerColor ? " (you)" : ""}
-            </span>
-          </p>
-        </div>
-
-        {gameOver ? (
-          <div className="space-y-3">
-            <div className="rounded-lg border border-zinc-700 bg-zinc-800 p-3 text-center">
-              <p className="text-lg font-bold text-white">Game Over</p>
-              <p className="text-sm text-zinc-400">{gameOver.reason}</p>
+      {/* Side panel */}
+      <div className="mt-3 w-full max-w-[min(90vw,560px)] lg:mt-0 lg:w-72">
+        <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
+          {/* Desktop info */}
+          <CardHeader className="hidden lg:block">
+            <CardTitle className="flex items-center justify-between text-base">
+              <div className="flex items-center gap-2">
+                <span className="text-xl select-none">{playerColor === "white" ? "♔" : "♚"}</span>
+                <span className="capitalize">{playerColor}</span>
+              </div>
+              <Badge
+                variant={isMyTurn ? "default" : "secondary"}
+                className={isMyTurn ? "" : "text-muted-foreground"}
+              >
+                {isMyTurn ? "Your turn" : "Waiting..."}
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Game stats */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-lg bg-background/50 p-3 text-center">
+                <div className="text-lg font-semibold text-foreground font-mono">{moveCount}</div>
+                <div className="text-xs text-muted-foreground">Moves</div>
+              </div>
+              <div className="rounded-lg bg-background/50 p-3 text-center">
+                <div className="font-mono text-xs text-muted-foreground truncate">{gameId.slice(0, 8)}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">Room ID</div>
+              </div>
             </div>
-            <button
-              onClick={onBackToLobby}
-              className="w-full rounded-lg bg-blue-600 py-3 font-medium text-white active:bg-blue-700 hover:bg-blue-700"
-            >
-              Back to Lobby
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={onResign}
-            className="w-full rounded-lg bg-red-600/20 py-3 font-medium text-red-400 active:bg-red-600/30 hover:bg-red-600/30"
-          >
-            Resign
-          </button>
-        )}
+
+            {/* Turn indicator bar */}
+            <div className="flex items-center gap-2 rounded-lg border border-border/50 bg-background/30 px-3 py-2.5">
+              <span
+                className={`inline-block h-2 w-2 rounded-full ${
+                  isMyTurn
+                    ? "bg-amber shadow-[0_0_8px_oklch(0.78_0.12_75)]"
+                    : "bg-muted-foreground/40"
+                }`}
+              />
+              <span className="text-sm text-muted-foreground">
+                {currentTurn === "white" ? "White" : "Black"} to move
+              </span>
+            </div>
+
+            {gameOver ? (
+              <div className="space-y-3">
+                <div className="rounded-lg border border-amber/20 bg-amber-muted p-4 text-center">
+                  <p className="text-lg font-semibold text-foreground">Game Over</p>
+                  <p className="mt-1 text-sm capitalize text-muted-foreground">{gameOver.reason}</p>
+                </div>
+                <Button onClick={onBackToLobby} className="h-11 w-full font-semibold" size="lg">
+                  Back to Lobby
+                </Button>
+              </div>
+            ) : (
+              <Button
+                variant="destructive"
+                onClick={onResign}
+                className="h-10 w-full"
+                size="lg"
+              >
+                Resign
+              </Button>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

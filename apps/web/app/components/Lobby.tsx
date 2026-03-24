@@ -1,5 +1,14 @@
 "use client";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
 interface LobbyProps {
   username: string;
@@ -19,53 +28,88 @@ export function Lobby({
   const [joinId, setJoinId] = useState("");
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-zinc-950 px-4">
-      <div className="w-full max-w-sm space-y-6 rounded-xl border border-zinc-800 bg-zinc-900 p-6 sm:p-8">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-white">Chess</h1>
-          <div className="flex items-center gap-3">
-            <span className="max-w-24 truncate text-sm text-zinc-400">
-              {username}
-            </span>
-            <button
-              onClick={onLogout}
-              className="text-sm text-zinc-500 active:text-zinc-300 hover:text-zinc-300"
+    <div className="flex min-h-dvh items-center justify-center px-4">
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute top-1/4 left-1/2 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber/5 blur-[150px]" />
+      </div>
+
+      <div className="relative w-full max-w-sm">
+        <Card className="glow-amber border-border/50 bg-card/80 backdrop-blur-sm">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-3 text-xl tracking-tight">
+                <span className="text-2xl select-none" style={{ filter: "drop-shadow(0 0 12px oklch(0.78 0.12 75 / 30%))" }}>♛</span>
+                Chess
+              </CardTitle>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="max-w-28 truncate font-mono text-xs font-normal">
+                  {username}
+                </Badge>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={onLogout}
+                  className="text-muted-foreground"
+                >
+                  Logout
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            {/* Connection status */}
+            <div className="flex items-center justify-center gap-2 text-sm">
+              <span
+                className={`inline-block h-2 w-2 rounded-full ${
+                  connected
+                    ? "bg-emerald-400 shadow-[0_0_8px_oklch(0.7_0.15_155)]"
+                    : "animate-pulse-amber bg-amber"
+                }`}
+              />
+              <span className="text-muted-foreground">
+                {connected ? "Connected" : "Connecting..."}
+              </span>
+            </div>
+
+            {/* Create room */}
+            <Button
+              onClick={onCreateRoom}
+              disabled={!connected}
+              className="h-12 w-full text-sm font-semibold"
+              size="lg"
             >
-              Logout
-            </button>
-          </div>
-        </div>
+              <span className="mr-1.5 select-none">+</span>
+              New Game
+            </Button>
 
-        <div
-          className={`text-center text-sm ${connected ? "text-green-400" : "text-yellow-400"}`}
-        >
-          {connected ? "Connected" : "Connecting..."}
-        </div>
+            {/* Divider */}
+            <div className="flex items-center gap-3">
+              <div className="h-px flex-1 bg-border" />
+              <span className="text-xs text-muted-foreground uppercase tracking-widest">or join</span>
+              <div className="h-px flex-1 bg-border" />
+            </div>
 
-        <button
-          onClick={onCreateRoom}
-          disabled={!connected}
-          className="w-full rounded-lg bg-blue-600 py-3 font-medium text-white active:bg-blue-700 hover:bg-blue-700 disabled:opacity-50"
-        >
-          Create Room
-        </button>
-
-        <div className="flex gap-2">
-          <input
-            type="text"
-            placeholder="Room ID"
-            value={joinId}
-            onChange={(e) => setJoinId(e.target.value)}
-            className="min-w-0 flex-1 rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-3 text-base text-white placeholder-zinc-500 outline-none focus:border-blue-500"
-          />
-          <button
-            onClick={() => joinId && onJoinRoom(joinId)}
-            disabled={!connected || !joinId}
-            className="rounded-lg bg-zinc-700 px-5 py-3 font-medium text-white active:bg-zinc-600 hover:bg-zinc-600 disabled:opacity-50"
-          >
-            Join
-          </button>
-        </div>
+            {/* Join room */}
+            <div className="flex gap-2">
+              <Input
+                type="text"
+                placeholder="Paste room code"
+                value={joinId}
+                onChange={(e) => setJoinId(e.target.value)}
+                className="h-11 flex-1 bg-background/50 font-mono text-sm"
+              />
+              <Button
+                onClick={() => joinId && onJoinRoom(joinId)}
+                disabled={!connected || !joinId}
+                variant="secondary"
+                className="h-11 px-5"
+                size="lg"
+              >
+                Join
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
