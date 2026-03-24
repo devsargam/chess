@@ -28,6 +28,7 @@ export default function Home() {
   const [fen, setFen] = useState(START_FEN);
   const [playerColor, setPlayerColor] = useState<"white" | "black">("white");
   const [currentTurn, setCurrentTurn] = useState<"white" | "black">("white");
+  const [moveHistory, setMoveHistory] = useState<string[]>([]);
   const [gameOver, setGameOver] = useState<{
     winner: string | null;
     reason: string;
@@ -42,6 +43,7 @@ export default function Home() {
           setFen(START_FEN);
           setCurrentTurn("white");
           setGameOver(null);
+          setMoveHistory([]);
           setScreen("waiting");
           break;
         }
@@ -50,6 +52,7 @@ export default function Home() {
           setFen((payload.fen as string) || START_FEN);
           setCurrentTurn("white");
           setGameOver(null);
+          setMoveHistory([]);
           setScreen("game");
 
           setGameId((prev) => {
@@ -63,6 +66,9 @@ export default function Home() {
         case events.move: {
           setFen(payload.fen as string);
           setCurrentTurn(payload.currentTurn as "white" | "black");
+          if (payload.san) {
+            setMoveHistory((prev) => [...prev, payload.san as string]);
+          }
 
           if (payload.gameOver) {
             setGameOver({
@@ -189,6 +195,7 @@ export default function Home() {
         fen={fen}
         playerColor={playerColor}
         currentTurn={currentTurn}
+        moveHistory={moveHistory}
         gameOver={gameOver}
         onMove={(from, to, promotion) =>
           send(events.move, { gameId, from, to, promotion })

@@ -17,6 +17,7 @@ interface GameProps {
   fen: string;
   playerColor: "white" | "black";
   currentTurn: "white" | "black";
+  moveHistory: string[];
   gameOver: { winner: string | null; reason: string } | null;
   onMove: (from: string, to: string, promotion?: string) => void;
   onResign: () => void;
@@ -28,6 +29,7 @@ export function Game({
   fen,
   playerColor,
   currentTurn,
+  moveHistory,
   gameOver,
   onMove,
   onResign,
@@ -36,6 +38,11 @@ export function Game({
   const isMyTurn = currentTurn === playerColor && !gameOver;
   const [selectedSquare, setSelectedSquare] = useState<Square | null>(null);
   const firedConfetti = useRef(false);
+  const movesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    movesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [moveHistory.length]);
 
   useEffect(() => {
     if (gameOver?.reason === "checkmate" && !firedConfetti.current) {
@@ -170,18 +177,6 @@ export function Game({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Game stats */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-lg bg-background/50 p-3 text-center">
-                <div className="text-lg font-semibold text-foreground font-mono">{moveCount}</div>
-                <div className="text-xs text-muted-foreground">Moves</div>
-              </div>
-              <div className="rounded-lg bg-background/50 p-3 text-center">
-                <div className="font-mono text-xs text-muted-foreground truncate">{gameId.slice(0, 8)}</div>
-                <div className="text-xs text-muted-foreground mt-0.5">Room ID</div>
-              </div>
-            </div>
-
             {/* Turn indicator bar */}
             <div className="flex items-center gap-2 rounded-lg border border-border/50 bg-background/30 px-3 py-2.5">
               <span
@@ -194,6 +189,40 @@ export function Game({
               <span className="text-sm text-muted-foreground">
                 {currentTurn === "white" ? "White" : "Black"} to move
               </span>
+            </div>
+
+            {/* Move history */}
+            <div className="rounded-lg border border-border/50 bg-background/30">
+              <div className="flex items-center justify-between px-3 py-2 border-b border-border/50">
+                <span className="text-xs font-medium text-muted-foreground">Moves</span>
+                <span className="text-xs text-muted-foreground font-mono">{moveCount}</span>
+              </div>
+              <div className="max-h-48 overflow-y-auto p-2 lg:max-h-64">
+                {moveHistory.length === 0 ? (
+                  <p className="py-3 text-center text-xs text-muted-foreground/60">No moves yet</p>
+                ) : (
+                  <div className="grid grid-cols-[auto_1fr_1fr] gap-x-2 gap-y-0.5">
+                    {Array.from({ length: Math.ceil(moveHistory.length / 2) }, (_, i) => {
+                      const moveNum = i + 1;
+                      const white = moveHistory[i * 2];
+                      const black = moveHistory[i * 2 + 1];
+                      const isLatest = i * 2 + 1 >= moveHistory.length - 1;
+                      return (
+                        <div key={moveNum} className="contents">
+                          <span className="text-xs text-muted-foreground/50 font-mono pr-1 text-right">{moveNum}.</span>
+                          <span className={`text-xs font-mono px-1.5 py-0.5 rounded ${isLatest && !black ? "bg-amber/10 text-foreground" : "text-muted-foreground"}`}>
+                            {white}
+                          </span>
+                          <span className={`text-xs font-mono px-1.5 py-0.5 rounded ${isLatest && black ? "bg-amber/10 text-foreground" : "text-muted-foreground"}`}>
+                            {black ?? ""}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <div ref={movesEndRef} />
+              </div>
             </div>
 
             {gameOver ? (
