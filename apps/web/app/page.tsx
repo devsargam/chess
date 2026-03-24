@@ -29,6 +29,7 @@ export default function Home() {
   const [playerColor, setPlayerColor] = useState<"white" | "black">("white");
   const [currentTurn, setCurrentTurn] = useState<"white" | "black">("white");
   const [moveHistory, setMoveHistory] = useState<string[]>([]);
+  const [takebackRequest, setTakebackRequest] = useState(false);
   const [gameOver, setGameOver] = useState<{
     winner: string | null;
     reason: string;
@@ -83,6 +84,21 @@ export default function Home() {
             winner: payload.winner as string | null,
             reason: "resign",
           });
+          break;
+        }
+        case events.takebackRequest: {
+          setTakebackRequest(true);
+          break;
+        }
+        case events.takebackResponse: {
+          // Takeback was declined — no action needed beyond clearing any pending state
+          break;
+        }
+        case events.takebackApplied: {
+          setFen(payload.fen as string);
+          setCurrentTurn(payload.currentTurn as "white" | "black");
+          setMoveHistory((prev) => prev.slice(0, -1));
+          setTakebackRequest(false);
           break;
         }
         case "error": {
@@ -196,11 +212,17 @@ export default function Home() {
         playerColor={playerColor}
         currentTurn={currentTurn}
         moveHistory={moveHistory}
+        takebackRequest={takebackRequest}
         gameOver={gameOver}
         onMove={(from, to, promotion) =>
           send(events.move, { gameId, from, to, promotion })
         }
         onResign={() => send(events.resign, { gameId })}
+        onRequestTakeback={() => send(events.takebackRequest, { gameId })}
+        onRespondTakeback={(accepted) => {
+          send(events.takebackResponse, { gameId, accepted });
+          setTakebackRequest(false);
+        }}
         onBackToLobby={() => {
           setGameId(null);
           setGameOver(null);

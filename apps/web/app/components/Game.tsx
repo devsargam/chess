@@ -18,9 +18,12 @@ interface GameProps {
   playerColor: "white" | "black";
   currentTurn: "white" | "black";
   moveHistory: string[];
+  takebackRequest: boolean;
   gameOver: { winner: string | null; reason: string } | null;
   onMove: (from: string, to: string, promotion?: string) => void;
   onResign: () => void;
+  onRequestTakeback: () => void;
+  onRespondTakeback: (accepted: boolean) => void;
   onBackToLobby: () => void;
 }
 
@@ -30,9 +33,12 @@ export function Game({
   playerColor,
   currentTurn,
   moveHistory,
+  takebackRequest,
   gameOver,
   onMove,
   onResign,
+  onRequestTakeback,
+  onRespondTakeback,
   onBackToLobby,
 }: GameProps) {
   const isMyTurn = currentTurn === playerColor && !gameOver;
@@ -225,6 +231,29 @@ export function Game({
               </div>
             </div>
 
+            {/* Takeback request banner */}
+            {takebackRequest && !gameOver && (
+              <div className="rounded-lg border border-amber/30 bg-amber-muted p-3">
+                <p className="text-sm font-medium text-foreground text-center mb-2">Opponent requests a takeback</p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="secondary"
+                    className="h-9 flex-1"
+                    onClick={() => onRespondTakeback(true)}
+                  >
+                    Accept
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="h-9 flex-1"
+                    onClick={() => onRespondTakeback(false)}
+                  >
+                    Decline
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {gameOver ? (
               <div className="space-y-3">
                 <div className="rounded-lg border border-amber/20 bg-amber-muted p-4 text-center">
@@ -236,14 +265,25 @@ export function Game({
                 </Button>
               </div>
             ) : (
-              <Button
-                variant="destructive"
-                onClick={onResign}
-                className="h-10 w-full"
-                size="lg"
-              >
-                Resign
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="secondary"
+                  onClick={onRequestTakeback}
+                  className="h-10 flex-1"
+                  size="lg"
+                  disabled={moveHistory.length === 0}
+                >
+                  Undo
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={onResign}
+                  className="h-10 flex-1"
+                  size="lg"
+                >
+                  Resign
+                </Button>
+              </div>
             )}
           </CardContent>
         </Card>

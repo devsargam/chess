@@ -58,6 +58,12 @@ export const handleMessage = async (
     case events.resign:
       await handleResign(ws, user, payload);
       break;
+    case events.takebackRequest:
+      await handleTakebackRequest(ws, user, payload);
+      break;
+    case events.takebackResponse:
+      await handleTakebackResponse(ws, user, payload);
+      break;
     default:
       sendError(ws, "Unknown event: " + type);
   }
@@ -182,6 +188,80 @@ async function handleResign(
 
     // Notify both players
     await broadcast(gameId, events.resign, { gameId: game.id, winner: game.winner, endReason: "resign" });
+  } catch (err) {
+    sendError(ws, (err as Error).message);
+  }
+}
+
+async function handleTakebackRequest(
+  ws: WebSocket,
+  user: AuthenticatedUser,
+  payload: Record<string, unknown> | undefined,
+) {
+  try {
+    const gameId = payload?.gameId as string;
+    if (!gameId) return sendError(ws, "Missing gameId");
+
+    const game = await gameStore.findById(gameId);
+    if (!game) return sendError(ws, "Game not found");
+    if (game.status !== "active") return sendError(ws, "Game is not active");
+    if (game.moves.length === 0) return sendError(ws, "No moves to undo");
+
+    // Send request to opponent
+    const opponent = game.players.find((p) => p.id !== user.id);
+    if (!opponent) return sendError(ws, "No opponent found");
+
+    const opponentWs = connections.get(opponent.id);
+    if (opponentWs && opponentWs.readyState === WebSocket.OPEN) {
+      send(opponentWs, events.takebackRequest, { gameId, requestedBy: user.id });
+    }
+  } catch (err) {
+    sendError(ws, (err as Error).message);
+  }
+}
+
+async function handleTakebackResponse(
+  ws: WebSocket,
+  user: AuthenticatedUser,
+  payload: Record<string, unknown> | undefined,
+) {
+  try {
+    const gameId = payload?.gameId as string;
+    const accepted = payload?.accepted as boolean;
+    if (!gameId) return sendError(ws, "Missing gameId");
+
+    const game = await gameStore.findById(gameId);
+    if (!game) return sendError(ws, "Game not found");
+    if (game.status !== "active") return sendError(ws, "Game is not active");
+
+    if (!accepted) {
+      // Notify requester that takeback was declined
+      const requester = game.players.find((p) => p.id !== user.id);
+      if (requester) {
+        const reqWs = connections.get(requester.id);
+        if (reqWs && reqWs.readyState === WebSocket.OPEN) {
+          send(reqWs, events.takebackResponse, { gameId, accepted: false });
+        }
+      }
+      return;
+    }
+
+    // Undo the move
+    if (game.moves.length === 0) return sendError(ws, "No moves to undo");
+
+    const chess = await getChess(gameId);
+    chess.undo();
+
+    const updatedGame = await gameStore.undoMove(gameId);
+    updatedGame.fen = chess.fen();
+    await gameStore.saveGamePublic(updatedGame);
+
+    // Broadcast the undo to both players
+    await broadcast(gameId, events.takebackApplied, {
+      gameId,
+      fen: chess.fen(),
+      currentTurn: chess.turn() === "w" ? "white" : "black",
+    });
   } catch (err) {
     sendError(ws, (err as Error).message);
   }

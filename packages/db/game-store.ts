@@ -138,6 +138,23 @@ class GameStore {
     return this.endGame(gameId, opponent.id, "resign");
   }
 
+  async undoMove(gameId: string): Promise<GameRecord> {
+    const game = await this.getGame(gameId);
+    if (!game) throw new Error("Game not found");
+    if (game.status !== "active") throw new Error("Game is not active");
+    if (game.moves.length === 0) throw new Error("No moves to undo");
+
+    game.moves.pop();
+    game.currentTurn = game.currentTurn === "white" ? "black" : "white";
+    game.updatedAt = new Date().toISOString();
+    // fen will be set by the caller after chess.undo()
+    return game;
+  }
+
+  async saveGamePublic(game: GameRecord): Promise<void> {
+    await this.saveGame(game);
+  }
+
   async findById(id: string): Promise<GameRecord | null> {
     return this.getGame(id);
   }
