@@ -18,6 +18,7 @@ interface GameProps {
   playerColor: "white" | "black";
   currentTurn: "white" | "black";
   moveHistory: string[];
+  lastMove: { from: string; to: string } | null;
   takebackRequest: boolean;
   gameOver: { winner: string | null; reason: string } | null;
   onMove: (from: string, to: string, promotion?: string) => void;
@@ -33,6 +34,7 @@ export function Game({
   playerColor,
   currentTurn,
   moveHistory,
+  lastMove,
   takebackRequest,
   gameOver,
   onMove,
@@ -73,6 +75,12 @@ export function Game({
 
   const squareStyles = useMemo(() => {
     const styles: Record<string, React.CSSProperties> = {};
+    // Highlight last move
+    if (lastMove) {
+      styles[lastMove.from] = { backgroundColor: "oklch(0.78 0.12 75 / 20%)" };
+      styles[lastMove.to] = { backgroundColor: "oklch(0.78 0.12 75 / 30%)" };
+    }
+    // Selected square and legal moves (override last move highlight)
     if (selectedSquare && isMyTurn) {
       styles[selectedSquare] = { backgroundColor: "oklch(0.78 0.12 75 / 35%)" };
       for (const move of legalMoves) {
@@ -82,7 +90,7 @@ export function Game({
       }
     }
     return styles;
-  }, [selectedSquare, legalMoves, isMyTurn]);
+  }, [selectedSquare, legalMoves, isMyTurn, lastMove]);
 
   const handleSquareClick = useCallback(
     ({ square }: { square: string }) => {

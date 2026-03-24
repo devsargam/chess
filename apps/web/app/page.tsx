@@ -29,6 +29,7 @@ export default function Home() {
   const [playerColor, setPlayerColor] = useState<"white" | "black">("white");
   const [currentTurn, setCurrentTurn] = useState<"white" | "black">("white");
   const [moveHistory, setMoveHistory] = useState<string[]>([]);
+  const [lastMove, setLastMove] = useState<{ from: string; to: string } | null>(null);
   const [takebackRequest, setTakebackRequest] = useState(false);
   const [gameOver, setGameOver] = useState<{
     winner: string | null;
@@ -45,6 +46,7 @@ export default function Home() {
           setCurrentTurn("white");
           setGameOver(null);
           setMoveHistory([]);
+          setLastMove(null);
           setScreen("waiting");
           break;
         }
@@ -54,6 +56,7 @@ export default function Home() {
           setCurrentTurn("white");
           setGameOver(null);
           setMoveHistory([]);
+          setLastMove(null);
           setScreen("game");
 
           setGameId((prev) => {
@@ -67,6 +70,7 @@ export default function Home() {
         case events.move: {
           setFen(payload.fen as string);
           setCurrentTurn(payload.currentTurn as "white" | "black");
+          setLastMove({ from: payload.from as string, to: payload.to as string });
           if (payload.san) {
             setMoveHistory((prev) => [...prev, payload.san as string]);
           }
@@ -98,6 +102,7 @@ export default function Home() {
           setFen(payload.fen as string);
           setCurrentTurn(payload.currentTurn as "white" | "black");
           setMoveHistory((prev) => prev.slice(0, -1));
+          setLastMove(null);
           setTakebackRequest(false);
           break;
         }
@@ -212,6 +217,7 @@ export default function Home() {
         playerColor={playerColor}
         currentTurn={currentTurn}
         moveHistory={moveHistory}
+        lastMove={lastMove}
         takebackRequest={takebackRequest}
         gameOver={gameOver}
         onMove={(from, to, promotion) =>
