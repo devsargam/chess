@@ -80,6 +80,25 @@ export function Game({
       styles[lastMove.from] = { backgroundColor: "oklch(0.78 0.12 75 / 20%)" };
       styles[lastMove.to] = { backgroundColor: "oklch(0.78 0.12 75 / 30%)" };
     }
+    // Highlight king square in red when in check
+    if (chess.inCheck()) {
+      const turn = chess.turn(); // 'w' or 'b'
+      const board = chess.board();
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const piece = board[r]![c];
+          if (piece && piece.type === "k" && piece.color === turn) {
+            const file = String.fromCharCode(97 + c);
+            const rank = String(8 - r);
+            const sq = `${file}${rank}`;
+            styles[sq] = {
+              backgroundColor: "oklch(0.55 0.2 25 / 50%)",
+              boxShadow: "inset 0 0 12px oklch(0.55 0.2 25 / 40%)",
+            };
+          }
+        }
+      }
+    }
     // Selected square and legal moves (override last move highlight)
     if (selectedSquare && isMyTurn) {
       styles[selectedSquare] = { backgroundColor: "oklch(0.78 0.12 75 / 35%)" };
