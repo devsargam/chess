@@ -75,6 +75,15 @@ export default function Home() {
             setMoveHistory((prev) => [...prev, payload.san as string]);
           }
 
+          // Play sound
+          if (payload.inCheck) {
+            new Audio("/sounds/notify.mp3").play().catch(() => {});
+          } else if (payload.captured) {
+            new Audio("/sounds/capture.mp3").play().catch(() => {});
+          } else {
+            new Audio("/sounds/move-self.mp3").play().catch(() => {});
+          }
+
           if (payload.gameOver) {
             setGameOver({
               winner: payload.winner as string | null,
