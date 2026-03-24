@@ -7,8 +7,14 @@ const API_URL =
     : "http://localhost:4000";
 
 export function useAuth() {
-  const [token, setToken] = useState<string | null>(null);
-  const [username, setUsername] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return localStorage.getItem("chess_token");
+  });
+  const [username, setUsername] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return localStorage.getItem("chess_username");
+  });
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -37,6 +43,8 @@ export function useAuth() {
 
         setToken(json.data.token);
         setUsername(usernameInput);
+        localStorage.setItem("chess_token", json.data.token);
+        localStorage.setItem("chess_username", usernameInput);
         return true;
       } catch {
         setError("Failed to connect to server");
@@ -51,6 +59,8 @@ export function useAuth() {
   const logout = useCallback(() => {
     setToken(null);
     setUsername(null);
+    localStorage.removeItem("chess_token");
+    localStorage.removeItem("chess_username");
   }, []);
 
   return { token, username, error, loading, authenticate, logout };
