@@ -127,6 +127,23 @@ export function Game({
           dests={dests}
           lastMove={chessiroLastMove}
           theme={BOARD_THEME}
+          promotionVisuals={{
+            backdropColor: "rgba(0, 0, 0, 0.7)",
+            panelColor: "oklch(0.15 0.005 60 / 98%)",
+            panelBorderColor: "oklch(0.78 0.12 75 / 25%)",
+            panelShadow: "0 8px 32px rgba(0, 0, 0, 0.5)",
+            panelRadius: "12px",
+            titleColor: "oklch(0.93 0.01 80)",
+            optionBackground: "oklch(0.22 0.01 60)",
+            optionBorderColor: "oklch(0.78 0.12 75 / 15%)",
+            optionRadius: "8px",
+          }}
+          squareVisuals={{
+            legalDot: "oklch(0.78 0.12 75 / 45%)",
+            legalDotOutline: "oklch(0.93 0.01 80 / 60%)",
+            legalCaptureRing: "oklch(0.78 0.12 75 / 55%)",
+            selectedOutline: "oklch(0.78 0.12 75 / 80%)",
+          }}
           onMove={(from, to, promotion) => {
             const localChess = new Chess(fen);
             const result = localChess.move({
