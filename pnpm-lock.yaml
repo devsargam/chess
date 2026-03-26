@@ -62,6 +62,9 @@ importers:
       chess.js:
         specifier: ^1.4.0
         version: 1.4.0
+      chessiro-canvas:
+        specifier: ^0.1.31
+        version: 0.1.31(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -80,9 +83,6 @@ importers:
       react:
         specifier: ^19.2.0
         version: 19.2.0
-      react-chessboard:
-        specifier: ^5.10.0
-        version: 5.10.0(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       react-dom:
         specifier: ^19.2.0
         version: 19.2.0(react@19.2.0)
@@ -401,28 +401,6 @@ packages:
 
   '@borewit/text-codec@0.2.2':
     resolution: {integrity: sha512-DDaRehssg1aNrH4+2hnj1B7vnUGEjU6OIlyRdkMd0aUdIUvKXrJfXsy8LVtXAy7DRvYVluWbMspsRhz2lcW0mQ==}
-
-  '@dnd-kit/accessibility@3.1.1':
-    resolution: {integrity: sha512-2P+YgaXF+gRsIihwwY1gCsQSYnu9Zyj2py8kY5fFvUM1qm2WA2u639R6YNVfU4GWr+ZM5mqEsfHZZLoRONbemw==}
-    peerDependencies:
-      react: '>=16.8.0'
-
-  '@dnd-kit/core@6.3.1':
-    resolution: {integrity: sha512-xkGBRQQab4RLwgXxoqETICr6S5JlogafbhNsidmrkVv2YRs5MLwpjoF2qpiGjQt8S9AoxtIV603s0GIUpY5eYQ==}
-    peerDependencies:
-      react: '>=16.8.0'
-      react-dom: '>=16.8.0'
-
-  '@dnd-kit/modifiers@9.0.0':
-    resolution: {integrity: sha512-ybiLc66qRGuZoC20wdSSG6pDXFikui/dCNGthxv4Ndy8ylErY0N3KVxY2bgo7AWwIbxDmXDg3ylAFmnrjcbVvw==}
-    peerDependencies:
-      '@dnd-kit/core': ^6.3.0
-      react: '>=16.8.0'
-
-  '@dnd-kit/utilities@3.2.2':
-    resolution: {integrity: sha512-+MKAJEOfaBe5SmV6t34p80MMKhjvUz0vRrvVJbPT0WElzaOJ/1xs+D+KDv+tD/NE5ujfrChEcshd4fLn0wpiqg==}
-    peerDependencies:
-      react: '>=16.8.0'
 
   '@dotenvx/dotenvx@1.57.2':
     resolution: {integrity: sha512-lv9+UZPnl/KOvShepevLWm3+/wc1It5kgO5Q580evnvOFMZcgKVEYFwxlL7Ohl9my1yjTsWo28N3PJYUEO8wFQ==}
@@ -1216,6 +1194,12 @@ packages:
 
   chess.js@1.4.0:
     resolution: {integrity: sha512-BBJgrrtKQOzFLonR0l+k64A98NLemPwNsCskwb+29bRwobUa4iTm51E1kwGPbWXAcfdDa18nad6vpPPKPWarqw==}
+
+  chessiro-canvas@0.1.31:
+    resolution: {integrity: sha512-MbNbjHlDQOQkIdQov2ZxdJ5jubSnqQ4n+mW3vuNotQpiLQAbC91weEJ1E4ITL8iEzP6V22j8bzO1Qze0YUm0nw==}
+    peerDependencies:
+      react: '>=18.0.0'
+      react-dom: '>=18.0.0'
 
   class-variance-authority@0.7.1:
     resolution: {integrity: sha512-Ka+9Trutv7G8M6WT6SeiRWz792K5qEqIGEGzXKhAE6xOWAY6pPH8U+9IY3oCMv6kqTmLsv7Xh/2w2RigkePMsg==}
@@ -2581,13 +2565,6 @@ packages:
     resolution: {integrity: sha512-K5zQjDllxWkf7Z5xJdV0/B0WTNqx6vxG70zJE4N0kBs4LovmEYWJzQGxC9bS9RAKu3bgM40lrd5zoLJ12MQ5BA==}
     engines: {node: '>= 0.10'}
 
-  react-chessboard@5.10.0:
-    resolution: {integrity: sha512-Y3PgaCVhnDG3IaQfu86OzTSEIEAUtuU5XwmHWnx3tcFOX7lSoAq81ZFX3MBj6y5a6FzDMTczMVmkkrV2CzTrIw==}
-    engines: {node: '>=20.11.0', pnpm: '>=9.4.0'}
-    peerDependencies:
-      react: ^19.0.0
-      react-dom: ^19.0.0
-
   react-dom@19.2.0:
     resolution: {integrity: sha512-UlbRu4cAiGaIewkPyiRGJk0imDN2T3JjieT6spoL2UeSf5od4n5LB/mQ4ejmxhCFT1tYe8IvaFulzynWovsEFQ==}
     peerDependencies:
@@ -3343,31 +3320,6 @@ snapshots:
       '@types/react': 19.2.2
 
   '@borewit/text-codec@0.2.2': {}
-
-  '@dnd-kit/accessibility@3.1.1(react@19.2.0)':
-    dependencies:
-      react: 19.2.0
-      tslib: 2.8.1
-
-  '@dnd-kit/core@6.3.1(react-dom@19.2.0(react@19.2.0))(react@19.2.0)':
-    dependencies:
-      '@dnd-kit/accessibility': 3.1.1(react@19.2.0)
-      '@dnd-kit/utilities': 3.2.2(react@19.2.0)
-      react: 19.2.0
-      react-dom: 19.2.0(react@19.2.0)
-      tslib: 2.8.1
-
-  '@dnd-kit/modifiers@9.0.0(@dnd-kit/core@6.3.1(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)':
-    dependencies:
-      '@dnd-kit/core': 6.3.1(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
-      '@dnd-kit/utilities': 3.2.2(react@19.2.0)
-      react: 19.2.0
-      tslib: 2.8.1
-
-  '@dnd-kit/utilities@3.2.2(react@19.2.0)':
-    dependencies:
-      react: 19.2.0
-      tslib: 2.8.1
 
   '@dotenvx/dotenvx@1.57.2':
     dependencies:
@@ -4146,6 +4098,11 @@ snapshots:
   chalk@5.6.2: {}
 
   chess.js@1.4.0: {}
+
+  chessiro-canvas@0.1.31(react-dom@19.2.0(react@19.2.0))(react@19.2.0):
+    dependencies:
+      react: 19.2.0
+      react-dom: 19.2.0(react@19.2.0)
 
   class-variance-authority@0.7.1:
     dependencies:
@@ -5551,13 +5508,6 @@ snapshots:
       http-errors: 2.0.1
       iconv-lite: 0.7.2
       unpipe: 1.0.0
-
-  react-chessboard@5.10.0(react-dom@19.2.0(react@19.2.0))(react@19.2.0):
-    dependencies:
-      '@dnd-kit/core': 6.3.1(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
-      '@dnd-kit/modifiers': 9.0.0(@dnd-kit/core@6.3.1(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)
-      react: 19.2.0
-      react-dom: 19.2.0(react@19.2.0)
 
   react-dom@19.2.0(react@19.2.0):
     dependencies:
