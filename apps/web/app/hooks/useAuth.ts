@@ -3,7 +3,7 @@ import { useState, useCallback, useEffect } from "react";
 
 const API_URL =
   process.env.NODE_ENV === "production"
-    ? "https://api.chess.vish.am"
+    ? "https://api.chess.sarg.am"
     : "http://localhost:4000";
 
 export function useAuth() {
