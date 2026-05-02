@@ -3,7 +3,7 @@ import { useRef, useState, useCallback, useEffect } from "react";
 
 const WS_URL =
   process.env.NODE_ENV === "production"
-    ? "wss://ws.chess.sarg.am"
+    ? "wss://ws.chess.vish.am"
     : "ws://localhost:8080";
 
 type MessageHandler = (type: string, payload: Record<string, unknown>) => void;

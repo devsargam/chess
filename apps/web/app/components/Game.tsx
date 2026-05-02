@@ -49,10 +49,12 @@ export function Game({
 }: GameProps) {
   const isMyTurn = currentTurn === playerColor && !gameOver;
   const firedConfetti = useRef(false);
-  const movesEndRef = useRef<HTMLDivElement>(null);
+  const movesContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    movesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (movesContainerRef.current) {
+      movesContainerRef.current.scrollTop = movesContainerRef.current.scrollHeight;
+    }
   }, [moveHistory.length]);
 
   useEffect(() => {
@@ -110,7 +112,7 @@ export function Game({
         </div>
         <Badge
           variant={isMyTurn ? "default" : "secondary"}
-          className={isMyTurn ? "" : "text-muted-foreground"}
+          className={isMyTurn ? "py-4" : "text-muted-foreground py-4"}
         >
           {isMyTurn ? "Your turn" : "Waiting..."}
         </Badge>
@@ -182,11 +184,10 @@ export function Game({
             {/* Turn indicator bar */}
             <div className="flex items-center gap-2 rounded-lg border border-border/50 bg-background/30 px-3 py-2.5">
               <span
-                className={`inline-block h-2 w-2 rounded-full ${
-                  isMyTurn
-                    ? "bg-amber shadow-[0_0_8px_oklch(0.78_0.12_75)]"
-                    : "bg-muted-foreground/40"
-                }`}
+                className={`inline-block h-2 w-2 rounded-full ${isMyTurn
+                  ? "bg-amber shadow-[0_0_8px_oklch(0.78_0.12_75)]"
+                  : "bg-muted-foreground/40"
+                  }`}
               />
               <span className="text-sm text-muted-foreground">
                 {currentTurn === "white" ? "White" : "Black"} to move
@@ -203,7 +204,7 @@ export function Game({
                   {moveCount}
                 </span>
               </div>
-              <div className="max-h-48 overflow-y-auto p-2 lg:max-h-64">
+              <div className="max-h-48 overflow-y-auto p-2 lg:max-h-64" ref={movesContainerRef}>
                 {moveHistory.length === 0 ? (
                   <p className="py-3 text-center text-xs text-muted-foreground/60">
                     No moves yet
@@ -238,7 +239,6 @@ export function Game({
                     )}
                   </div>
                 )}
-                <div ref={movesEndRef} />
               </div>
             </div>
 

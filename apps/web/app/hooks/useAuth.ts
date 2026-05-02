@@ -1,20 +1,19 @@
 "use client";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 
 const API_URL =
   process.env.NODE_ENV === "production"
-    ? "https://api.chess.sarg.am"
+    ? "https://api.chess.vish.am"
     : "http://localhost:4000";
 
 export function useAuth() {
-  const [token, setToken] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
-    return localStorage.getItem("chess_token");
-  });
-  const [username, setUsername] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
-    return localStorage.getItem("chess_username");
-  });
+  const [token, setToken] = useState<string | null>(null);
+  const [username, setUsername] = useState<string | null>(null);
+
+  useEffect(() => {
+    setToken(localStorage.getItem("chess_token"));
+    setUsername(localStorage.getItem("chess_username"));
+  }, []);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
