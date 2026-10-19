@@ -1,5 +1,6 @@
 "use client";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
+import { Chess } from "chess.js";
 import { events } from "@repo/shared/events";
 import { useAuth } from "./hooks/useAuth";
 import { useSocket } from "./hooks/useSocket";
@@ -19,8 +20,16 @@ type Screen = "auth" | "lobby" | "waiting" | "game";
 
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
+interface RollbackState {
+  fen: string;
+  currentTurn: "white" | "black";
+  moveHistory: string[];
+  lastMove: { from: string; to: string } | null;
+}
+
 export default function Home() {
-  const { token, username, error, loading, authenticate, logout } = useAuth();
+  const { token, username, ready, error, loading, authenticate, logout } =
+    useAuth();
   const [copied, setCopied] = useState(false);
 
   const [screen, setScreen] = useState<Screen>("auth");
@@ -29,12 +38,16 @@ export default function Home() {
   const [playerColor, setPlayerColor] = useState<"white" | "black">("white");
   const [currentTurn, setCurrentTurn] = useState<"white" | "black">("white");
   const [moveHistory, setMoveHistory] = useState<string[]>([]);
-  const [lastMove, setLastMove] = useState<{ from: string; to: string } | null>(null);
+  const [lastMove, setLastMove] = useState<{ from: string; to: string } | null>(
+    null,
+  );
   const [takebackRequest, setTakebackRequest] = useState(false);
   const [gameOver, setGameOver] = useState<{
     winner: string | null;
     reason: string;
   } | null>(null);
+
+  const rollbackRef = useRef<RollbackState | null>(null);
 
   const handleWsMessage = useCallback(
     (type: string, payload: Record<string, unknown>) => {
@@ -50,32 +63,38 @@ export default function Home() {
           setScreen("waiting");
           break;
         }
-        case events.joinRoom: {
-          const incomingGameId = payload.gameId as string;
-          setFen((payload.fen as string) || START_FEN);
-          setCurrentTurn("white");
-          setGameOver(null);
-          setMoveHistory([]);
-          setLastMove(null);
-          setScreen("game");
-
-          setGameId((prev) => {
-            if (prev !== incomingGameId) {
-              setPlayerColor("black");
-            }
-            return incomingGameId;
-          });
+        case events.sync: {
+          // Full game state from the server: sent on connect, join and rejoin
+          const status = payload.status as string;
+          setGameId(payload.gameId as string);
+          setPlayerColor(payload.color as "white" | "black");
+          setFen(payload.fen as string);
+          setCurrentTurn(payload.currentTurn as "white" | "black");
+          setMoveHistory(payload.moves as string[]);
+          setLastMove(payload.lastMove as { from: string; to: string } | null);
+          setTakebackRequest(false);
+          rollbackRef.current = null;
+          setGameOver(
+            status === "completed"
+              ? {
+                  winner: payload.winner as string | null,
+                  reason: payload.endReason as string,
+                }
+              : null,
+          );
+          setScreen(status === "waiting" ? "waiting" : "game");
           break;
         }
         case events.move: {
           setFen(payload.fen as string);
           setCurrentTurn(payload.currentTurn as "white" | "black");
-          setLastMove({ from: payload.from as string, to: payload.to as string });
-          if (payload.san) {
-            setMoveHistory((prev) => [...prev, payload.san as string]);
-          }
+          setLastMove({
+            from: payload.from as string,
+            to: payload.to as string,
+          });
+          setMoveHistory(payload.moves as string[]);
+          rollbackRef.current = null;
 
-          // Play sound
           if (payload.inCheck) {
             new Audio("/sounds/notify.mp3").play().catch(() => {});
           } else if (payload.captured) {
@@ -104,19 +123,27 @@ export default function Home() {
           break;
         }
         case events.takebackResponse: {
-          // Takeback was declined — no action needed beyond clearing any pending state
           break;
         }
         case events.takebackApplied: {
           setFen(payload.fen as string);
           setCurrentTurn(payload.currentTurn as "white" | "black");
-          setMoveHistory((prev) => prev.slice(0, -1));
+          setMoveHistory(payload.moves as string[]);
           setLastMove(null);
           setTakebackRequest(false);
+          rollbackRef.current = null;
           break;
         }
         case "error": {
           console.error("Server error:", payload.message);
+          const rollback = rollbackRef.current;
+          if (rollback) {
+            setFen(rollback.fen);
+            setCurrentTurn(rollback.currentTurn);
+            setMoveHistory(rollback.moveHistory);
+            setLastMove(rollback.lastMove);
+            rollbackRef.current = null;
+          }
           break;
         }
       }
@@ -124,11 +151,23 @@ export default function Home() {
     [],
   );
 
-  const { connected, send } = useSocket(token, handleWsMessage);
+  const { connected, send } = useSocket(token, handleWsMessage, logout);
+
+  // After a reconnect, ask for the current game's state in case we missed
+  // anything (e.g. the opponent moved or resigned while we were offline)
+  const gameIdRef = useRef(gameId);
+  gameIdRef.current = gameId;
+  useEffect(() => {
+    if (connected && gameIdRef.current) {
+      send(events.joinRoom, { gameId: gameIdRef.current });
+    }
+  }, [connected, send]);
 
   if (token && screen === "auth") {
     setScreen("lobby");
   }
+
+  if (!ready) return null;
 
   if (!token) {
     return <AuthForm onAuth={authenticate} loading={loading} error={error} />;
@@ -143,6 +182,7 @@ export default function Home() {
         onJoinRoom={(id) => send(events.joinRoom, { gameId: id })}
         onLogout={() => {
           logout();
+          setGameId(null);
           setScreen("auth");
         }}
       />
@@ -207,7 +247,10 @@ export default function Home() {
               <Button
                 variant="ghost"
                 className="w-full text-muted-foreground"
-                onClick={() => setScreen("lobby")}
+                onClick={() => {
+                  setGameId(null);
+                  setScreen("lobby");
+                }}
               >
                 Back to Lobby
               </Button>
@@ -229,9 +272,25 @@ export default function Home() {
         lastMove={lastMove}
         takebackRequest={takebackRequest}
         gameOver={gameOver}
-        onMove={(from, to, promotion) =>
-          send(events.move, { gameId, from, to, promotion })
-        }
+        onMove={(from, to, promotion) => {
+          const localChess = new Chess(fen);
+          const result = localChess.move({ from, to, promotion });
+          if (!result) return;
+
+          rollbackRef.current = {
+            fen,
+            currentTurn,
+            moveHistory,
+            lastMove,
+          };
+
+          setFen(localChess.fen());
+          setCurrentTurn(localChess.turn() === "w" ? "white" : "black");
+          setLastMove({ from, to });
+          setMoveHistory((prev) => [...prev, result.san]);
+
+          send(events.move, { gameId, from, to, promotion });
+        }}
         onResign={() => send(events.resign, { gameId })}
         onRequestTakeback={() => send(events.takebackRequest, { gameId })}
         onRespondTakeback={(accepted) => {

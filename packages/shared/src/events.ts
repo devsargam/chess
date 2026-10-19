@@ -6,6 +6,7 @@ const events = {
   takebackRequest: "takeback_request",
   takebackResponse: "takeback_response",
   takebackApplied: "takeback_applied",
+  sync: "sync",
 };
 
 export { events };

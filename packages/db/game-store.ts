@@ -31,6 +31,8 @@ interface GameRecord {
 }
 
 const GAME_KEY = (id: string) => `game:${id}`;
+// Points a user at the game they're currently in, so reconnects can resume it
+const ACTIVE_GAME_KEY = (userId: string) => `user:${userId}:active-game`;
 
 class GameStore {
   private async getGame(gameId: string): Promise<GameRecord | null> {
@@ -57,6 +59,7 @@ class GameStore {
     };
 
     await this.saveGame(game);
+    await redis.set(ACTIVE_GAME_KEY(playerId), game.id);
     return game;
   }
 
@@ -73,6 +76,7 @@ class GameStore {
     game.status = "active";
     game.updatedAt = new Date().toISOString();
     await this.saveGame(game);
+    await redis.set(ACTIVE_GAME_KEY(playerId), game.id);
     return game;
   }
 
@@ -124,6 +128,7 @@ class GameStore {
     game.endReason = reason;
     game.updatedAt = new Date().toISOString();
     await this.saveGame(game);
+    await redis.del(...game.players.map((p) => ACTIVE_GAME_KEY(p.id)));
     return game;
   }
 
@@ -157,6 +162,17 @@ class GameStore {
 
   async findById(id: string): Promise<GameRecord | null> {
     return this.getGame(id);
+  }
+
+  async findActiveGame(userId: string): Promise<GameRecord | null> {
+    const gameId = await redis.get(ACTIVE_GAME_KEY(userId));
+    if (!gameId) return null;
+    const game = await this.getGame(gameId);
+    if (!game || (game.status !== "waiting" && game.status !== "active")) {
+      await redis.del(ACTIVE_GAME_KEY(userId));
+      return null;
+    }
+    return game;
   }
 }
 

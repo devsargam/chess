@@ -1,7 +1,7 @@
 import { WebSocketServer } from "ws";
 import { websocketMessage } from "@repo/shared/zod-schema";
 import { verifyJwt, extractToken } from "./auth";
-import { handleMessage, connections } from "./handlers";
+import { handleMessage, connections, syncUser } from "./handlers";
 
 const wss = new WebSocketServer({ port: 8080 });
 
@@ -20,22 +20,41 @@ wss.on("connection", (ws, req) => {
   // Use username as id since the user store lives in the API process
   const user = { id: username, username };
 
-  // Register this connection
+  // Register this connection (a newer tab/reconnect replaces the old one)
+  connections.get(user.id)?.close(4000, "Replaced by new connection");
   connections.set(user.id, ws);
 
   console.log("Connected:", user);
 
+  // Resume whatever game this user was in before reloading/reconnecting
+  syncUser(ws, user.id);
+
+  let alive = true;
+  ws.on("pong", () => (alive = true));
+  const heartbeat = setInterval(() => {
+    if (!alive) return ws.terminate();
+    alive = false;
+    ws.ping();
+  }, 30_000);
+
   ws.on("error", console.error);
 
   ws.on("close", () => {
-    connections.delete(user.id);
+    clearInterval(heartbeat);
+    // Only unregister if a newer connection hasn't already taken over
+    if (connections.get(user.id) === ws) connections.delete(user.id);
     console.log("Disconnected:", user);
   });
 
   ws.on("message", (raw) => {
-    const { data, success } = websocketMessage.safeParse(
-      JSON.parse(raw.toString()),
-    );
+    let json: unknown;
+    try {
+      json = JSON.parse(raw.toString());
+    } catch {
+      console.error("Malformed message:", raw.toString());
+      return;
+    }
+    const { data, success } = websocketMessage.safeParse(json);
 
     if (!success) {
       console.error("Invalid message:", raw.toString());

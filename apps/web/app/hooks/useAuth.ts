@@ -1,5 +1,5 @@
 "use client";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 
 const API_URL =
   process.env.NODE_ENV === "production"
@@ -7,14 +7,17 @@ const API_URL =
     : "http://localhost:4000";
 
 export function useAuth() {
-  const [token, setToken] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
-    return localStorage.getItem("chess_token");
-  });
-  const [username, setUsername] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
-    return localStorage.getItem("chess_username");
-  });
+  const [token, setToken] = useState<string | null>(null);
+  const [username, setUsername] = useState<string | null>(null);
+  // false until localStorage has been read, so we don't flash the login form
+  const [ready, setReady] = useState(false);
+
+  // Read after mount (not during render) to avoid an SSR hydration mismatch
+  useEffect(() => {
+    setToken(localStorage.getItem("chess_token"));
+    setUsername(localStorage.getItem("chess_username"));
+    setReady(true);
+  }, []);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -63,5 +66,5 @@ export function useAuth() {
     localStorage.removeItem("chess_username");
   }, []);
 
-  return { token, username, error, loading, authenticate, logout };
+  return { token, username, ready, error, loading, authenticate, logout };
 }
