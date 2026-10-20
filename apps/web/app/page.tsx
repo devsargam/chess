@@ -6,7 +6,7 @@ import { useAuth } from "./hooks/useAuth";
 import { useSocket } from "./hooks/useSocket";
 import { AuthForm } from "./components/AuthForm";
 import { Lobby } from "./components/Lobby";
-import { Game } from "./components/Game";
+import { Game, type Clocks, type TimeControl } from "./components/Game";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -25,6 +25,13 @@ interface RollbackState {
   currentTurn: "white" | "black";
   moveHistory: string[];
   lastMove: { from: string; to: string } | null;
+}
+
+/** Server sends time left in ms; stamp it with when we received it */
+function toClocks(raw: unknown): Clocks | null {
+  if (!raw) return null;
+  const { white, black } = raw as { white: number; black: number };
+  return { white, black, receivedAt: Date.now() };
 }
 
 export default function Home() {
@@ -47,6 +54,9 @@ export default function Home() {
     reason: string;
   } | null>(null);
 
+  const [timeControl, setTimeControl] = useState<TimeControl | null>(null);
+  const [clocks, setClocks] = useState<Clocks | null>(null);
+
   const rollbackRef = useRef<RollbackState | null>(null);
 
   const handleWsMessage = useCallback(
@@ -54,6 +64,8 @@ export default function Home() {
       switch (type) {
         case events.createRoom: {
           setGameId(payload.gameId as string);
+          setTimeControl(payload.timeControl as TimeControl | null);
+          setClocks(null);
           setPlayerColor("white");
           setFen(START_FEN);
           setCurrentTurn("white");
@@ -72,6 +84,8 @@ export default function Home() {
           setCurrentTurn(payload.currentTurn as "white" | "black");
           setMoveHistory(payload.moves as string[]);
           setLastMove(payload.lastMove as { from: string; to: string } | null);
+          setTimeControl(payload.timeControl as TimeControl | null);
+          setClocks(toClocks(payload.clocks));
           setTakebackRequest(false);
           rollbackRef.current = null;
           setGameOver(
@@ -93,6 +107,7 @@ export default function Home() {
             to: payload.to as string,
           });
           setMoveHistory(payload.moves as string[]);
+          setClocks(toClocks(payload.clocks));
           rollbackRef.current = null;
 
           if (payload.inCheck) {
@@ -129,6 +144,7 @@ export default function Home() {
           setFen(payload.fen as string);
           setCurrentTurn(payload.currentTurn as "white" | "black");
           setMoveHistory(payload.moves as string[]);
+          setClocks(toClocks(payload.clocks));
           setLastMove(null);
           setTakebackRequest(false);
           rollbackRef.current = null;
@@ -178,7 +194,7 @@ export default function Home() {
       <Lobby
         username={username!}
         connected={connected}
-        onCreateRoom={() => send(events.createRoom)}
+        onCreateRoom={(tc) => send(events.createRoom, { timeControl: tc })}
         onJoinRoom={(id) => send(events.joinRoom, { gameId: id })}
         onLogout={() => {
           logout();
@@ -213,6 +229,11 @@ export default function Home() {
               <CardDescription>
                 Share this room code with your opponent
               </CardDescription>
+              {timeControl && (
+                <p className="font-mono text-sm text-foreground">
+                  {timeControl.initial / 60_000}+{timeControl.increment / 1000}
+                </p>
+              )}
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Room code display */}
@@ -265,11 +286,13 @@ export default function Home() {
     return (
       <Game
         gameId={gameId}
+        username={username!}
         fen={fen}
         playerColor={playerColor}
         currentTurn={currentTurn}
         moveHistory={moveHistory}
         lastMove={lastMove}
+        clocks={clocks}
         takebackRequest={takebackRequest}
         gameOver={gameOver}
         onMove={(from, to, promotion) => {

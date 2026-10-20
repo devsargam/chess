@@ -7,13 +7,28 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
+/** Milliseconds */
+export interface TimeControl {
+  initial: number;
+  increment: number;
+}
+
+/** Time left (ms) for each side as of `receivedAt` (local Date.now()) */
+export interface Clocks {
+  white: number;
+  black: number;
+  receivedAt: number;
+}
+
 interface GameProps {
   gameId: string;
+  username: string;
   fen: string;
   playerColor: "white" | "black";
   currentTurn: "white" | "black";
   moveHistory: string[];
   lastMove: { from: string; to: string } | null;
+  clocks: Clocks | null;
   takebackRequest: boolean;
   gameOver: { winner: string | null; reason: string } | null;
   onMove: (from: string, to: string, promotion?: string) => void;
@@ -30,15 +45,27 @@ const BOARD_THEME = {
   lightSquare: "#C8B898",
   lastMoveHighlight: "oklch(0.78 0.12 75 / 30%)",
   selectedPiece: "oklch(0.78 0.12 75 / 35%)",
+  checkGradient:
+    "radial-gradient(circle, oklch(0.62 0.24 25 / 95%) 0%, oklch(0.55 0.22 25 / 60%) 40%, transparent 75%)",
+};
+
+const END_REASONS: Record<string, string> = {
+  checkmate: "Checkmate",
+  timeout: "Time out",
+  resign: "Resignation",
+  stalemate: "Stalemate",
+  draw: "Draw",
 };
 
 export function Game({
   gameId,
+  username,
   fen,
   playerColor,
   currentTurn,
   moveHistory,
   lastMove,
+  clocks,
   takebackRequest,
   gameOver,
   onMove,
@@ -87,6 +114,28 @@ export function Game({
   }, [chess, isMyTurn]);
 
   const turnChar = chess.turn();
+  const inCheck = chess.inCheck();
+  // King square of the side in check (stays lit on checkmate)
+  const checkSquare = useMemo(() => {
+    if (!inCheck) return null;
+    const king = chess
+      .board()
+      .flat()
+      .find((p) => p?.type === "k" && p.color === turnChar);
+    return king?.square ?? null;
+  }, [chess, inCheck, turnChar]);
+
+  const ending = gameOver
+    ? {
+        title: END_REASONS[gameOver.reason] ?? gameOver.reason,
+        outcome:
+          gameOver.winner === null
+            ? "Draw"
+            : gameOver.winner === username
+              ? "You won"
+              : "You lost",
+      }
+    : null;
   const movableColor = isMyTurn ? turnChar : undefined;
 
   const chessiroLastMove = useMemo(
@@ -116,8 +165,17 @@ export function Game({
         </Badge>
       </div>
 
-      {/* Board */}
-      <div className="glow-amber w-full max-w-[min(90vw,560px)] overflow-hidden rounded-xl">
+      {/* Board, with opponent's clock above and ours below */}
+      <div className="w-full max-w-[min(90vw,560px)] space-y-2">
+      {clocks && (
+        <Clock
+          label={playerColor === "white" ? "Black" : "White"}
+          clocks={clocks}
+          color={playerColor === "white" ? "black" : "white"}
+          running={!gameOver && currentTurn !== playerColor}
+        />
+      )}
+      <div className="glow-amber relative overflow-hidden rounded-xl">
         <ChessiroCanvas
           position={fen}
           orientation={playerColor === "white" ? "white" : "black"}
@@ -126,6 +184,7 @@ export function Game({
           movableColor={movableColor}
           dests={dests}
           lastMove={chessiroLastMove}
+          check={checkSquare}
           theme={BOARD_THEME}
           promotionVisuals={{
             backdropColor: "rgba(0, 0, 0, 0.7)",
@@ -156,6 +215,33 @@ export function Game({
             return true;
           }}
         />
+        {ending && (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/30 animate-in fade-in duration-500">
+            <div
+              className={`rounded-xl border px-6 py-4 text-center shadow-2xl backdrop-blur-md animate-in zoom-in-90 duration-300 ${
+                gameOver?.reason === "checkmate"
+                  ? "border-red-500/50 bg-red-950/80"
+                  : "border-amber/40 bg-card/90"
+              }`}
+            >
+              <p className="text-2xl font-bold tracking-tight text-foreground">
+                {ending.title}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {ending.outcome}
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+      {clocks && (
+        <Clock
+          label="You"
+          clocks={clocks}
+          color={playerColor}
+          running={!gameOver && currentTurn === playerColor}
+        />
+      )}
       </div>
 
       {/* Side panel */}
@@ -191,6 +277,11 @@ export function Game({
               <span className="text-sm text-muted-foreground">
                 {currentTurn === "white" ? "White" : "Black"} to move
               </span>
+              {inCheck && !gameOver && (
+                <span className="ml-auto animate-pulse rounded bg-red-500/20 px-2 py-0.5 text-xs font-semibold text-red-400">
+                  Check!
+                </span>
+              )}
             </div>
 
             {/* Move history */}
@@ -271,10 +362,10 @@ export function Game({
               <div className="space-y-3">
                 <div className="rounded-lg border border-amber/20 bg-amber-muted p-4 text-center">
                   <p className="text-lg font-semibold text-foreground">
-                    Game Over
+                    {ending?.outcome}
                   </p>
-                  <p className="mt-1 text-sm capitalize text-muted-foreground">
-                    {gameOver.reason}
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {ending?.title}
                   </p>
                 </div>
                 <Button
@@ -309,6 +400,61 @@ export function Game({
           </CardContent>
         </Card>
       </div>
+    </div>
+  );
+}
+
+function formatClock(ms: number) {
+  const totalSeconds = Math.ceil(ms / 1000);
+  const m = Math.floor(totalSeconds / 60);
+  const sec = String(totalSeconds % 60).padStart(2, "0");
+  // Show tenths in the last 10 seconds
+  if (ms < 10_000) return `0:${(ms / 1000).toFixed(1).padStart(4, "0")}`;
+  return `${m}:${sec}`;
+}
+
+function Clock({
+  label,
+  clocks,
+  color,
+  running,
+}: {
+  label: string;
+  clocks: Clocks;
+  color: "white" | "black";
+  running: boolean;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!running) return;
+    const id = setInterval(() => setNow(Date.now()), 100);
+    return () => clearInterval(id);
+  }, [running]);
+
+  // Server is authoritative; this only counts down between updates
+  const elapsed = running ? Math.max(0, now - clocks.receivedAt) : 0;
+  const left = Math.max(0, clocks[color] - elapsed);
+  const low = left < 20_000;
+
+  return (
+    <div
+      className={`flex items-center justify-between rounded-lg border px-4 py-2 transition-colors ${
+        running
+          ? low
+            ? "border-red-500/50 bg-red-500/10"
+            : "border-amber/40 bg-amber/10"
+          : "border-border/50 bg-card/60"
+      }`}
+    >
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <span
+        className={`font-mono text-xl font-semibold tabular-nums ${
+          running ? (low ? "text-red-400" : "text-foreground") : "text-muted-foreground"
+        }`}
+      >
+        {formatClock(left)}
+      </span>
     </div>
   );
 }

@@ -17,6 +17,17 @@ interface Move {
   timestamp: string;
 }
 
+/** All values in milliseconds */
+interface TimeControl {
+  initial: number;
+  increment: number;
+}
+
+interface Clocks {
+  white: number;
+  black: number;
+}
+
 interface GameRecord {
   id: string;
   players: Player[];
@@ -26,6 +37,10 @@ interface GameRecord {
   fen: string;
   winner: string | null;
   endReason: string | null;
+  timeControl: TimeControl | null;
+  // Time left for each side as of turnStartedAt; null for untimed games
+  clocks: Clocks | null;
+  turnStartedAt: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -33,6 +48,23 @@ interface GameRecord {
 const GAME_KEY = (id: string) => `game:${id}`;
 // Points a user at the game they're currently in, so reconnects can resume it
 const ACTIVE_GAME_KEY = (userId: string) => `user:${userId}:active-game`;
+
+/** Time `color` has left right now, counting the running clock */
+function timeLeft(game: GameRecord, color: PieceColor): number {
+  if (!game.clocks) return Infinity;
+  let left = game.clocks[color];
+  if (game.status === "active" && color === game.currentTurn && game.turnStartedAt) {
+    left -= Date.now() - game.turnStartedAt;
+  }
+  return Math.max(0, left);
+}
+
+/** Stop the running clock: charge the side to move for time spent so far */
+function chargeClock(game: GameRecord, increment = 0) {
+  if (!game.clocks) return;
+  game.clocks[game.currentTurn] = timeLeft(game, game.currentTurn) + increment;
+  game.turnStartedAt = Date.now();
+}
 
 class GameStore {
   private async getGame(gameId: string): Promise<GameRecord | null> {
@@ -44,7 +76,10 @@ class GameStore {
     await redis.set(GAME_KEY(game.id), JSON.stringify(game));
   }
 
-  async createGame(playerId: string): Promise<GameRecord> {
+  async createGame(
+    playerId: string,
+    timeControl: TimeControl | null,
+  ): Promise<GameRecord> {
     const game: GameRecord = {
       id: crypto.randomUUID(),
       players: [{ id: playerId, color: "white" }],
@@ -54,6 +89,11 @@ class GameStore {
       fen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
       winner: null,
       endReason: null,
+      timeControl,
+      clocks: timeControl
+        ? { white: timeControl.initial, black: timeControl.initial }
+        : null,
+      turnStartedAt: null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -74,6 +114,7 @@ class GameStore {
 
     game.players.push({ id: playerId, color: "black" });
     game.status = "active";
+    game.turnStartedAt = Date.now(); // white's clock starts now
     game.updatedAt = new Date().toISOString();
     await this.saveGame(game);
     await redis.set(ACTIVE_GAME_KEY(playerId), game.id);
@@ -109,6 +150,7 @@ class GameStore {
       timestamp: new Date().toISOString(),
     });
     game.fen = fen;
+    chargeClock(game, game.timeControl?.increment);
     game.currentTurn = game.currentTurn === "white" ? "black" : "white";
     game.updatedAt = new Date().toISOString();
     await this.saveGame(game);
@@ -123,6 +165,7 @@ class GameStore {
     const game = await this.getGame(gameId);
     if (!game) throw new Error("Game not found");
 
+    if (game.status === "active") chargeClock(game);
     game.status = "completed";
     game.winner = winner;
     game.endReason = reason;
@@ -150,6 +193,7 @@ class GameStore {
     if (game.moves.length === 0) throw new Error("No moves to undo");
 
     game.moves.pop();
+    chargeClock(game);
     game.currentTurn = game.currentTurn === "white" ? "black" : "white";
     game.updatedAt = new Date().toISOString();
     // fen will be set by the caller after chess.undo()
@@ -177,4 +221,13 @@ class GameStore {
 }
 
 export const gameStore = new GameStore();
-export type { GameRecord, Player, Move, PieceColor, GameStatus };
+export { timeLeft };
+export type {
+  GameRecord,
+  Player,
+  Move,
+  PieceColor,
+  GameStatus,
+  TimeControl,
+  Clocks,
+};

@@ -9,11 +9,19 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import type { TimeControl } from "./Game";
+
+// [minutes, increment seconds]
+const PRESETS: { name: string; controls: [number, number][] }[] = [
+  { name: "Blitz", controls: [[3, 0], [3, 2], [5, 3]] },
+  { name: "Rapid", controls: [[10, 0], [10, 5], [15, 10]] },
+  { name: "Classical", controls: [[30, 0], [30, 20], [60, 30]] },
+];
 
 interface LobbyProps {
   username: string;
   connected: boolean;
-  onCreateRoom: () => void;
+  onCreateRoom: (timeControl: TimeControl) => void;
   onJoinRoom: (gameId: string) => void;
   onLogout: () => void;
 }
@@ -26,6 +34,21 @@ export function Lobby({
   onLogout,
 }: LobbyProps) {
   const [joinId, setJoinId] = useState("");
+  const [picked, setPicked] = useState<string>("10+0");
+  const [customMinutes, setCustomMinutes] = useState("20");
+  const [customIncrement, setCustomIncrement] = useState("5");
+
+  const [minutes, increment] =
+    picked === "custom"
+      ? [Number(customMinutes), Number(customIncrement)]
+      : picked.split("+").map(Number);
+  const validTime =
+    Number.isInteger(minutes) &&
+    Number.isInteger(increment) &&
+    minutes! >= 1 &&
+    minutes! <= 180 &&
+    increment! >= 0 &&
+    increment! <= 60;
 
   return (
     <div className="flex min-h-dvh items-center justify-center px-4">
@@ -71,10 +94,62 @@ export function Lobby({
               </span>
             </div>
 
+            {/* Time control */}
+            <div className="space-y-2">
+              {PRESETS.map((group) => (
+                <div key={group.name} className="grid grid-cols-[5rem_1fr_1fr_1fr] items-center gap-2">
+                  <span className="text-xs text-muted-foreground">{group.name}</span>
+                  {group.controls.map(([m, inc]) => {
+                    const key = `${m}+${inc}`;
+                    return (
+                      <Button
+                        key={key}
+                        variant={picked === key ? "default" : "secondary"}
+                        size="sm"
+                        className="font-mono"
+                        onClick={() => setPicked(key)}
+                      >
+                        {key}
+                      </Button>
+                    );
+                  })}
+                </div>
+              ))}
+              <div className="grid grid-cols-[5rem_1fr] items-center gap-2">
+                <span className="text-xs text-muted-foreground">Custom</span>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={1}
+                    max={180}
+                    aria-label="Minutes per side"
+                    value={customMinutes}
+                    onFocus={() => setPicked("custom")}
+                    onChange={(e) => setCustomMinutes(e.target.value)}
+                    className={`h-8 w-16 font-mono text-sm ${picked === "custom" ? "border-primary" : ""}`}
+                  />
+                  <span className="text-xs text-muted-foreground">min +</span>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={60}
+                    aria-label="Increment in seconds"
+                    value={customIncrement}
+                    onFocus={() => setPicked("custom")}
+                    onChange={(e) => setCustomIncrement(e.target.value)}
+                    className={`h-8 w-16 font-mono text-sm ${picked === "custom" ? "border-primary" : ""}`}
+                  />
+                  <span className="text-xs text-muted-foreground">sec</span>
+                </div>
+              </div>
+            </div>
+
             {/* Create room */}
             <Button
-              onClick={onCreateRoom}
-              disabled={!connected}
+              onClick={() =>
+                onCreateRoom({ initial: minutes! * 60_000, increment: increment! * 1000 })
+              }
+              disabled={!connected || !validTime}
               className="h-12 w-full text-sm font-semibold"
               size="lg"
             >

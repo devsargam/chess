@@ -1,7 +1,8 @@
 import { WebSocket } from "ws";
 import { Chess } from "chess.js";
 import { events } from "@repo/shared/events";
-import { gameStore, type GameRecord } from "@repo/db/game-store";
+import { gameStore, timeLeft, type GameRecord } from "@repo/db/game-store";
+import { timeControl } from "@repo/shared/zod-schema";
 
 interface AuthenticatedUser {
   id: string;
@@ -27,6 +28,38 @@ async function getChess(gameId: string): Promise<Chess> {
   return chess;
 }
 
+// gameId -> timer that fires when the side to move runs out of time
+const flagTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function liveClocks(game: GameRecord) {
+  if (!game.clocks) return null;
+  return { white: timeLeft(game, "white"), black: timeLeft(game, "black") };
+}
+
+function scheduleFlag(game: GameRecord) {
+  clearTimeout(flagTimers.get(game.id));
+  flagTimers.delete(game.id);
+  if (game.status !== "active" || !game.clocks) return;
+  const ms = timeLeft(game, game.currentTurn);
+  flagTimers.set(game.id, setTimeout(() => checkFlag(game.id), ms + 50));
+}
+
+/** End the game if the side to move is out of time. Returns true if it ended. */
+async function checkFlag(gameId: string): Promise<boolean> {
+  const game = await gameStore.findById(gameId);
+  if (!game || game.status !== "active" || !game.clocks) return false;
+  if (timeLeft(game, game.currentTurn) > 0) {
+    scheduleFlag(game); // also re-arms timers lost in a server restart
+    return false;
+  }
+  const winner = game.players.find((p) => p.color !== game.currentTurn);
+  const ended = await gameStore.endGame(gameId, winner?.id ?? null, "timeout");
+  chessInstances.delete(gameId);
+  flagTimers.delete(gameId);
+  await syncPlayers(ended);
+  return true;
+}
+
 /** Full game state from one player's point of view */
 function gameState(game: GameRecord, userId: string) {
   const last = game.moves.at(-1);
@@ -40,6 +73,8 @@ function gameState(game: GameRecord, userId: string) {
     lastMove: last ? { from: last.from, to: last.to } : null,
     winner: game.winner,
     endReason: game.endReason,
+    timeControl: game.timeControl ?? null,
+    clocks: liveClocks(game),
   };
 }
 
@@ -47,7 +82,8 @@ function gameState(game: GameRecord, userId: string) {
 export async function syncUser(ws: WebSocket, userId: string) {
   try {
     const game = await gameStore.findActiveGame(userId);
-    if (game) send(ws, events.sync, gameState(game, userId));
+    if (!game || (await checkFlag(game.id))) return;
+    send(ws, events.sync, gameState(game, userId));
   } catch (err) {
     sendError(ws, (err as Error).message);
   }
@@ -84,7 +120,7 @@ export const handleMessage = async (
 ) => {
   switch (type) {
     case events.createRoom:
-      await handleCreateRoom(ws, user);
+      await handleCreateRoom(ws, user, payload);
       break;
     case events.joinRoom:
       await handleJoinRoom(ws, user, payload);
@@ -106,11 +142,18 @@ export const handleMessage = async (
   }
 };
 
-async function handleCreateRoom(ws: WebSocket, user: AuthenticatedUser) {
+async function handleCreateRoom(
+  ws: WebSocket,
+  user: AuthenticatedUser,
+  payload: Record<string, unknown> | undefined,
+) {
   try {
-    const game = await gameStore.createGame(user.id);
+    const tc = timeControl.nullable().optional().safeParse(payload?.timeControl);
+    if (!tc.success) return sendError(ws, "Invalid time control");
+
+    const game = await gameStore.createGame(user.id, tc.data ?? null);
     chessInstances.set(game.id, new Chess());
-    send(ws, events.createRoom, { gameId: game.id });
+    send(ws, events.createRoom, { gameId: game.id, timeControl: game.timeControl });
   } catch (err) {
     sendError(ws, (err as Error).message);
   }
@@ -128,10 +171,12 @@ async function handleJoinRoom(
     // Re-joining a game you're already in just resyncs you
     const existing = await gameStore.findById(gameId);
     if (existing?.players.some((p) => p.id === user.id)) {
+      if (await checkFlag(gameId)) return;
       return send(ws, events.sync, gameState(existing, user.id));
     }
 
     const game = await gameStore.joinGame(gameId, user.id);
+    scheduleFlag(game);
 
     // Notify both players that the game is starting
     await syncPlayers(game);
@@ -155,6 +200,8 @@ async function handleMove(
       return sendError(ws, "Missing move fields: gameId, from, to");
     }
 
+    if (await checkFlag(gameId)) return;
+
     const game = await gameStore.findById(gameId);
     if (!game) return sendError(ws, "Game not found");
     if (game.status !== "active") return sendError(ws, "Game is not active");
@@ -169,7 +216,7 @@ async function handleMove(
     const result = chess.move({ from, to, promotion });
     if (!result) return sendError(ws, "Illegal move");
 
-    const updated = await gameStore.addMove(gameId, user.id, { from, to, promotion }, result.san, chess.fen());
+    let updated = await gameStore.addMove(gameId, user.id, { from, to, promotion }, result.san, chess.fen());
 
     const movePayload: Record<string, unknown> = {
       gameId,
@@ -199,13 +246,16 @@ async function handleMove(
         reason = "unknown";
       }
 
-      await gameStore.endGame(gameId, winner, reason);
+      updated = await gameStore.endGame(gameId, winner, reason);
       chessInstances.delete(gameId);
 
       movePayload.gameOver = true;
       movePayload.winner = winner;
       movePayload.endReason = reason;
     }
+
+    scheduleFlag(updated);
+    movePayload.clocks = liveClocks(updated);
 
     // Broadcast move to both players
     await broadcast(gameId, events.move, movePayload);
@@ -225,6 +275,7 @@ async function handleResign(
 
     const game = await gameStore.resign(gameId, user.id);
     chessInstances.delete(gameId);
+    scheduleFlag(game); // clears the timer
 
     // Notify both players
     await broadcast(gameId, events.resign, { gameId: game.id, winner: game.winner, endReason: "resign" });
@@ -295,11 +346,13 @@ async function handleTakebackResponse(
     const updatedGame = await gameStore.undoMove(gameId);
     updatedGame.fen = chess.fen();
     await gameStore.saveGamePublic(updatedGame);
+    scheduleFlag(updatedGame);
 
     // Broadcast the undo to both players
     await broadcast(gameId, events.takebackApplied, {
       gameId,
       moves: updatedGame.moves.map((m) => m.san),
+      clocks: liveClocks(updatedGame),
       fen: chess.fen(),
       currentTurn: chess.turn() === "w" ? "white" : "black",
     });

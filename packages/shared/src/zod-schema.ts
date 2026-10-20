@@ -15,4 +15,10 @@ const websocketMessage = z.object({
   payload: z.record(z.string(), z.unknown()).optional(),
 });
 
-export { signup, login, websocketMessage };
+// Milliseconds: 1 to 180 minutes, 0 to 60 second increment
+const timeControl = z.object({
+  initial: z.number().int().min(60_000).max(180 * 60_000),
+  increment: z.number().int().min(0).max(60_000),
+});
+
+export { signup, login, websocketMessage, timeControl };
