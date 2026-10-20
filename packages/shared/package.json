@@ -7,7 +7,8 @@
   "exports": {
     "./zod-schema": "./src/zod-schema.ts",
     "./constants": "./src/constants.ts",
-    "./events": "./src/events.ts"
+    "./events": "./src/events.ts",
+    "./sudoku": "./src/sudoku.ts"
   },
   "dependencies": {
     "zod": "^4.3.6"

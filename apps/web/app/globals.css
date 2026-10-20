@@ -5,7 +5,7 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-    --font-heading: var(--font-sans);
+    --font-heading: var(--heading-font);
     --font-sans: var(--font-sans);
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
@@ -86,6 +86,63 @@
     --sidebar-accent-foreground: oklch(0.85 0.02 80);
     --sidebar-border: oklch(0.22 0.01 60);
     --sidebar-ring: oklch(0.78 0.12 75);
+    --heading-font: var(--font-sans);
+}
+
+/* ── Design experiments ─────────────────────────────────────────────
+   Obsidian is the default (:root above). Each variant overrides the
+   tokens; components only use tokens, so the whole app re-skins. */
+
+[data-design="paper"] {
+    --background: oklch(0.97 0.012 85);
+    --foreground: oklch(0.22 0.02 60);
+    --card: oklch(0.995 0.004 85);
+    --card-foreground: oklch(0.22 0.02 60);
+    --popover: oklch(0.995 0.004 85);
+    --popover-foreground: oklch(0.22 0.02 60);
+    --primary: oklch(0.45 0.1 150);
+    --primary-foreground: oklch(0.98 0.01 85);
+    --secondary: oklch(0.93 0.015 85);
+    --secondary-foreground: oklch(0.3 0.02 60);
+    --muted: oklch(0.93 0.015 85);
+    --muted-foreground: oklch(0.5 0.02 60);
+    --accent: oklch(0.91 0.02 85);
+    --accent-foreground: oklch(0.25 0.02 60);
+    --destructive: oklch(0.55 0.2 25);
+    --border: oklch(0.87 0.015 85);
+    --input: oklch(0.87 0.015 85);
+    --ring: oklch(0.45 0.1 150);
+    --amber: oklch(0.45 0.1 150);
+    --amber-foreground: oklch(0.98 0.01 85);
+    --amber-muted: oklch(0.45 0.1 150 / 12%);
+    --radius: 0.375rem;
+    --heading-font: var(--font-serif);
+}
+
+[data-design="midnight"] {
+    --background: oklch(0.14 0.03 280);
+    --foreground: oklch(0.94 0.02 280);
+    --card: oklch(0.19 0.04 280);
+    --card-foreground: oklch(0.94 0.02 280);
+    --popover: oklch(0.19 0.04 280);
+    --popover-foreground: oklch(0.94 0.02 280);
+    --primary: oklch(0.72 0.17 295);
+    --primary-foreground: oklch(0.14 0.03 280);
+    --secondary: oklch(0.24 0.045 280);
+    --secondary-foreground: oklch(0.88 0.03 280);
+    --muted: oklch(0.24 0.045 280);
+    --muted-foreground: oklch(0.68 0.04 280);
+    --accent: oklch(0.27 0.05 280);
+    --accent-foreground: oklch(0.92 0.03 280);
+    --destructive: oklch(0.65 0.2 15);
+    --border: oklch(0.3 0.05 280);
+    --input: oklch(0.3 0.05 280);
+    --ring: oklch(0.72 0.17 295);
+    --amber: oklch(0.82 0.13 200);
+    --amber-foreground: oklch(0.14 0.03 280);
+    --amber-muted: oklch(0.82 0.13 200 / 14%);
+    --radius: 1rem;
+    --heading-font: var(--font-mono);
 }
 
 @layer base {
@@ -114,8 +171,14 @@ body::before {
 /* Subtle amber glow for key elements */
 .glow-amber {
   box-shadow:
-    0 0 20px oklch(0.78 0.12 75 / 8%),
-    0 0 60px oklch(0.78 0.12 75 / 4%);
+    0 0 20px color-mix(in oklch, var(--amber) 10%, transparent),
+    0 0 60px color-mix(in oklch, var(--amber) 5%, transparent);
+}
+[data-design="paper"] .glow-amber {
+  box-shadow: 0 1px 2px oklch(0.2 0.02 60 / 8%), 0 8px 24px oklch(0.2 0.02 60 / 8%);
+}
+[data-design="paper"] body::before {
+  opacity: 0.05;
 }
 
 /* Pulse animation for the waiting indicator */

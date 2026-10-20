@@ -6,12 +6,14 @@
   "license": "MIT",
   "exports": {
     ".": "./index.ts",
-    "./game-store": "./game-store.ts"
+    "./game-store": "./game-store.ts",
+    "./sudoku-store": "./sudoku-store.ts"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*"
   },
   "dependencies": {
-    "ioredis": "^5.10.1"
+    "ioredis": "^5.10.1",
+    "@repo/shared": "workspace:*"
   }
 }

@@ -2,14 +2,9 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import type { TimeControl } from "./Game";
+import { Shell } from "./Shell";
+import { DIFFICULTIES, type Difficulty } from "@repo/shared/sudoku";
 
 // [minutes, increment seconds]
 const PRESETS: { name: string; controls: [number, number][] }[] = [
@@ -21,171 +16,245 @@ const PRESETS: { name: string; controls: [number, number][] }[] = [
 interface LobbyProps {
   username: string;
   connected: boolean;
-  onCreateRoom: (timeControl: TimeControl) => void;
+  onCreateRoom: (timeControl: TimeControl | null) => void;
+  onCreateSudoku: (difficulty: Difficulty) => void;
   onJoinRoom: (gameId: string) => void;
   onLogout: () => void;
+  error: string | null;
 }
 
 export function Lobby({
   username,
   connected,
   onCreateRoom,
+  onCreateSudoku,
   onJoinRoom,
   onLogout,
+  error,
 }: LobbyProps) {
   const [joinId, setJoinId] = useState("");
+  const [mode, setMode] = useState<"chess" | "sudoku">("chess");
+  const [difficulty, setDifficulty] = useState<Difficulty>("easy");
   const [picked, setPicked] = useState<string>("10+0");
   const [customMinutes, setCustomMinutes] = useState("20");
   const [customIncrement, setCustomIncrement] = useState("5");
 
+  const untimed = picked === "unlimited";
   const [minutes, increment] =
-    picked === "custom"
+    picked === "custom" || untimed
       ? [Number(customMinutes), Number(customIncrement)]
       : picked.split("+").map(Number);
   const validTime =
-    Number.isInteger(minutes) &&
-    Number.isInteger(increment) &&
-    minutes! >= 1 &&
-    minutes! <= 180 &&
-    increment! >= 0 &&
-    increment! <= 60;
+    untimed ||
+    (Number.isInteger(minutes) &&
+      Number.isInteger(increment) &&
+      minutes! >= 1 &&
+      minutes! <= 180 &&
+      increment! >= 0 &&
+      increment! <= 60);
+
+  const summary = untimed ? "No clock" : validTime ? `${minutes}+${increment}` : "";
+
+  // Accept either a raw code or a full invite link
+  const joinCode = (() => {
+    const v = joinId.trim();
+    try {
+      return new URL(v).searchParams.get("join") ?? v;
+    } catch {
+      return v;
+    }
+  })();
 
   return (
-    <div className="flex min-h-dvh items-center justify-center px-4">
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute top-1/4 left-1/2 h-[600px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber/5 blur-[150px]" />
+    <Shell username={username} connected={connected} onLogout={onLogout}>
+      <div role="tablist" className="mb-5 grid grid-cols-2 rounded-lg border border-border bg-card/60 p-1">
+        {(["chess", "sudoku"] as const).map((m) => (
+          <button
+            key={m}
+            role="tab"
+            aria-selected={mode === m}
+            onClick={() => setMode(m)}
+            className={`rounded-md py-2 text-sm font-medium capitalize transition-colors ${
+              mode === m ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {m === "chess" ? "♟ Chess" : "▦ Sudoku"}
+          </button>
+        ))}
       </div>
 
-      <div className="relative w-full max-w-sm">
-        <Card className="glow-amber border-border/50 bg-card/80 backdrop-blur-sm">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-3 text-xl tracking-tight">
-                <span className="text-2xl select-none" style={{ filter: "drop-shadow(0 0 12px oklch(0.78 0.12 75 / 30%))" }}>♛</span>
-                Chess
-              </CardTitle>
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className="max-w-28 truncate font-mono text-xs font-normal">
-                  {username}
-                </Badge>
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  onClick={onLogout}
-                  className="text-muted-foreground"
-                >
-                  Logout
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            {/* Connection status */}
-            <div className="flex items-center justify-center gap-2 text-sm">
-              <span
-                className={`inline-block h-2 w-2 rounded-full ${
-                  connected
-                    ? "bg-emerald-400 shadow-[0_0_8px_oklch(0.7_0.15_155)]"
-                    : "animate-pulse-amber bg-amber"
-                }`}
-              />
-              <span className="text-muted-foreground">
-                {connected ? "Connected" : "Connecting..."}
-              </span>
-            </div>
+      {mode === "sudoku" ? (
+        <div className="space-y-4">
+          <div>
+            <h1 className="font-heading mb-1 text-2xl font-semibold tracking-tight">Sudoku race</h1>
+            <p className="text-sm text-muted-foreground">
+              Same board, two players. Correct numbers claim the square; most squares wins. 3 mistakes and you&apos;re out.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {DIFFICULTIES.map((d) => (
+              <Tile key={d} active={difficulty === d} onClick={() => setDifficulty(d)}>
+                <span className="font-semibold capitalize">{d}</span>
+              </Tile>
+            ))}
+          </div>
+          <Button
+            onClick={() => onCreateSudoku(difficulty)}
+            disabled={!connected}
+            className="glow-amber h-13 w-full text-base font-semibold capitalize"
+            size="lg"
+          >
+            {connected ? `Create sudoku · ${difficulty}` : "Connecting…"}
+          </Button>
+        </div>
+      ) : (
+      <>
+      <h1 className="font-heading mb-1 text-2xl font-semibold tracking-tight">New game</h1>
+      <p className="mb-5 text-sm text-muted-foreground">Pick a time control, then invite a friend.</p>
 
-            {/* Time control */}
-            <div className="space-y-2">
-              {PRESETS.map((group) => (
-                <div key={group.name} className="grid grid-cols-[5rem_1fr_1fr_1fr] items-center gap-2">
-                  <span className="text-xs text-muted-foreground">{group.name}</span>
-                  {group.controls.map(([m, inc]) => {
-                    const key = `${m}+${inc}`;
-                    return (
-                      <Button
-                        key={key}
-                        variant={picked === key ? "default" : "secondary"}
-                        size="sm"
-                        className="font-mono"
-                        onClick={() => setPicked(key)}
-                      >
-                        {key}
-                      </Button>
-                    );
-                  })}
-                </div>
-              ))}
-              <div className="grid grid-cols-[5rem_1fr] items-center gap-2">
-                <span className="text-xs text-muted-foreground">Custom</span>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    min={1}
-                    max={180}
-                    aria-label="Minutes per side"
-                    value={customMinutes}
-                    onFocus={() => setPicked("custom")}
-                    onChange={(e) => setCustomMinutes(e.target.value)}
-                    className={`h-8 w-16 font-mono text-sm ${picked === "custom" ? "border-primary" : ""}`}
-                  />
-                  <span className="text-xs text-muted-foreground">min +</span>
-                  <Input
-                    type="number"
-                    min={0}
-                    max={60}
-                    aria-label="Increment in seconds"
-                    value={customIncrement}
-                    onFocus={() => setPicked("custom")}
-                    onChange={(e) => setCustomIncrement(e.target.value)}
-                    className={`h-8 w-16 font-mono text-sm ${picked === "custom" ? "border-primary" : ""}`}
-                  />
-                  <span className="text-xs text-muted-foreground">sec</span>
-                </div>
-              </div>
+      <div className="space-y-4">
+        {PRESETS.map((group) => (
+          <section key={group.name}>
+            <h2 className="mb-1.5 text-xs font-medium tracking-wider text-muted-foreground uppercase">
+              {group.name}
+            </h2>
+            <div className="grid grid-cols-3 gap-2">
+              {group.controls.map(([m, inc]) => {
+                const key = `${m}+${inc}`;
+                return (
+                  <Tile key={key} active={picked === key} onClick={() => setPicked(key)}>
+                    <span className="font-mono text-lg font-semibold">{key}</span>
+                  </Tile>
+                );
+              })}
             </div>
+          </section>
+        ))}
 
-            {/* Create room */}
-            <Button
-              onClick={() =>
-                onCreateRoom({ initial: minutes! * 60_000, increment: increment! * 1000 })
-              }
-              disabled={!connected || !validTime}
-              className="h-12 w-full text-sm font-semibold"
-              size="lg"
-            >
-              <span className="mr-1.5 select-none">+</span>
-              New Game
-            </Button>
+        <section>
+          <h2 className="mb-1.5 text-xs font-medium tracking-wider text-muted-foreground uppercase">
+            Other
+          </h2>
+          <div className="grid grid-cols-2 gap-2">
+            <Tile active={untimed} onClick={() => setPicked("unlimited")}>
+              <span className="text-lg font-semibold">∞</span>
+              <span className="text-xs text-muted-foreground">No clock</span>
+            </Tile>
+            <Tile active={picked === "custom"} onClick={() => setPicked("custom")}>
+              <span className="text-lg font-semibold">⚙</span>
+              <span className="text-xs text-muted-foreground">Custom</span>
+            </Tile>
+          </div>
 
-            {/* Divider */}
-            <div className="flex items-center gap-3">
-              <div className="h-px flex-1 bg-border" />
-              <span className="text-xs text-muted-foreground uppercase tracking-widest">or join</span>
-              <div className="h-px flex-1 bg-border" />
-            </div>
-
-            {/* Join room */}
-            <div className="flex gap-2">
+          {picked === "custom" && (
+            <div className="mt-2 flex items-center gap-2 rounded-lg border border-border bg-card/60 p-3 animate-in fade-in slide-in-from-top-1">
               <Input
-                type="text"
-                placeholder="Paste room code"
-                value={joinId}
-                onChange={(e) => setJoinId(e.target.value)}
-                className="h-11 flex-1 bg-background/50 font-mono text-sm"
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={180}
+                aria-label="Minutes per side"
+                value={customMinutes}
+                onChange={(e) => setCustomMinutes(e.target.value)}
+                className="h-10 w-20 bg-background/50 text-center font-mono text-base"
               />
-              <Button
-                onClick={() => joinId && onJoinRoom(joinId)}
-                disabled={!connected || !joinId}
-                variant="secondary"
-                className="h-11 px-5"
-                size="lg"
-              >
-                Join
-              </Button>
+              <span className="text-sm text-muted-foreground">min +</span>
+              <Input
+                type="number"
+                inputMode="numeric"
+                min={0}
+                max={60}
+                aria-label="Increment in seconds"
+                value={customIncrement}
+                onChange={(e) => setCustomIncrement(e.target.value)}
+                className="h-10 w-20 bg-background/50 text-center font-mono text-base"
+              />
+              <span className="text-sm text-muted-foreground">sec</span>
             </div>
-          </CardContent>
-        </Card>
+          )}
+          {picked === "custom" && !validTime && (
+            <p className="mt-1.5 text-xs text-destructive">1–180 minutes, 0–60 second increment.</p>
+          )}
+        </section>
+
+        <Button
+          onClick={() =>
+            onCreateRoom(
+              untimed ? null : { initial: minutes! * 60_000, increment: increment! * 1000 },
+            )
+          }
+          disabled={!connected || !validTime}
+          className="glow-amber h-13 w-full text-base font-semibold"
+          size="lg"
+        >
+          {connected ? `Create game${summary ? ` · ${summary}` : ""}` : "Connecting…"}
+        </Button>
       </div>
-    </div>
+      </>
+      )}
+
+      <div className="my-6 flex items-center gap-3">
+        <div className="h-px flex-1 bg-border" />
+        <span className="text-xs tracking-widest text-muted-foreground uppercase">or join</span>
+        <div className="h-px flex-1 bg-border" />
+      </div>
+
+      <form
+        className="flex gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (joinCode) onJoinRoom(joinCode);
+        }}
+      >
+        <Input
+          type="text"
+          placeholder="Paste code or invite link"
+          autoCapitalize="none"
+          autoCorrect="off"
+          value={joinId}
+          onChange={(e) => setJoinId(e.target.value)}
+          className="h-12 flex-1 bg-card/60 font-mono text-base sm:text-sm"
+        />
+        <Button
+          type="submit"
+          disabled={!connected || !joinCode}
+          variant="secondary"
+          className="h-12 px-6"
+          size="lg"
+        >
+          Join
+        </Button>
+      </form>
+      {error && (
+        <p role="alert" className="mt-2 text-sm text-destructive">
+          {error}
+        </p>
+      )}
+    </Shell>
+  );
+}
+
+function Tile({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={`flex h-16 flex-col items-center justify-center rounded-lg border transition-all active:scale-[0.97] ${
+        active
+          ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary"
+          : "border-border bg-card/60 text-foreground/80 hover:border-primary/50 hover:bg-card"
+      }`}
+    >
+      {children}
+    </button>
   );
 }

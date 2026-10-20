@@ -3,6 +3,7 @@ import { Chess } from "chess.js";
 import { events } from "@repo/shared/events";
 import { gameStore, timeLeft, type GameRecord } from "@repo/db/game-store";
 import { timeControl } from "@repo/shared/zod-schema";
+import { handleSudokuCreate, handleSudokuPlace, syncSudoku, tryJoinSudoku } from "./sudoku";
 
 interface AuthenticatedUser {
   id: string;
@@ -67,6 +68,7 @@ function gameState(game: GameRecord, userId: string) {
     gameId: game.id,
     status: game.status,
     color: game.players.find((p) => p.id === userId)?.color,
+    opponent: game.players.find((p) => p.id !== userId)?.id ?? null,
     fen: game.fen,
     currentTurn: game.currentTurn,
     moves: game.moves.map((m) => m.san),
@@ -82,8 +84,8 @@ function gameState(game: GameRecord, userId: string) {
 export async function syncUser(ws: WebSocket, userId: string) {
   try {
     const game = await gameStore.findActiveGame(userId);
-    if (!game || (await checkFlag(game.id))) return;
-    send(ws, events.sync, gameState(game, userId));
+    if (game && !(await checkFlag(game.id))) send(ws, events.sync, gameState(game, userId));
+    await syncSudoku(ws, userId);
   } catch (err) {
     sendError(ws, (err as Error).message);
   }
@@ -137,6 +139,12 @@ export const handleMessage = async (
     case events.takebackResponse:
       await handleTakebackResponse(ws, user, payload);
       break;
+    case events.sudokuCreate:
+      await handleSudokuCreate(ws, user.id, payload);
+      break;
+    case events.sudokuPlace:
+      await handleSudokuPlace(ws, user.id, payload);
+      break;
     default:
       sendError(ws, "Unknown event: " + type);
   }
@@ -167,6 +175,9 @@ async function handleJoinRoom(
   try {
     const gameId = payload?.gameId as string;
     if (!gameId) return sendError(ws, "Missing gameId");
+
+    // Room codes are shared between chess and sudoku
+    if (await tryJoinSudoku(ws, user.id, gameId)) return;
 
     // Re-joining a game you're already in just resyncs you
     const existing = await gameStore.findById(gameId);
@@ -361,12 +372,12 @@ async function handleTakebackResponse(
   }
 }
 
-function send(ws: WebSocket, type: string, payload: Record<string, unknown>) {
+export function send(ws: WebSocket, type: string, payload: Record<string, unknown>) {
   if (ws.readyState !== WebSocket.OPEN) return;
   ws.send(JSON.stringify({ type, payload }));
 }
 
-function sendError(ws: WebSocket, message: string) {
+export function sendError(ws: WebSocket, message: string) {
   if (ws.readyState !== WebSocket.OPEN) return;
   ws.send(JSON.stringify({ type: "error", payload: { message } }));
 }

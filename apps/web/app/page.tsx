@@ -7,16 +7,10 @@ import { useSocket } from "./hooks/useSocket";
 import { AuthForm } from "./components/AuthForm";
 import { Lobby } from "./components/Lobby";
 import { Game, type Clocks, type TimeControl } from "./components/Game";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
+import { Waiting } from "./components/Waiting";
+import { Sudoku, type SudokuState } from "./components/Sudoku";
 
-type Screen = "auth" | "lobby" | "waiting" | "game";
+type Screen = "auth" | "lobby" | "waiting" | "game" | "sudoku";
 
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
@@ -37,7 +31,6 @@ function toClocks(raw: unknown): Clocks | null {
 export default function Home() {
   const { token, username, ready, error, loading, authenticate, logout } =
     useAuth();
-  const [copied, setCopied] = useState(false);
 
   const [screen, setScreen] = useState<Screen>("auth");
   const [gameId, setGameId] = useState<string | null>(null);
@@ -56,6 +49,14 @@ export default function Home() {
 
   const [timeControl, setTimeControl] = useState<TimeControl | null>(null);
   const [clocks, setClocks] = useState<Clocks | null>(null);
+  const [opponent, setOpponent] = useState<string | null>(null);
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [sudoku, setSudoku] = useState<SudokuState | null>(null);
+  const [sudokuWrong, setSudokuWrong] = useState<{
+    index: number;
+    value: number;
+    at: number;
+  } | null>(null);
 
   const rollbackRef = useRef<RollbackState | null>(null);
 
@@ -63,6 +64,7 @@ export default function Home() {
     (type: string, payload: Record<string, unknown>) => {
       switch (type) {
         case events.createRoom: {
+          setSudoku(null);
           setGameId(payload.gameId as string);
           setTimeControl(payload.timeControl as TimeControl | null);
           setClocks(null);
@@ -86,6 +88,9 @@ export default function Home() {
           setLastMove(payload.lastMove as { from: string; to: string } | null);
           setTimeControl(payload.timeControl as TimeControl | null);
           setClocks(toClocks(payload.clocks));
+          setOpponent((payload.opponent as string | null) ?? null);
+          setServerError(null);
+          setSudoku(null);
           setTakebackRequest(false);
           rollbackRef.current = null;
           setGameOver(
@@ -97,6 +102,23 @@ export default function Home() {
               : null,
           );
           setScreen(status === "waiting" ? "waiting" : "game");
+          break;
+        }
+        case events.sudokuSync: {
+          const state = { ...(payload as unknown as SudokuState), receivedAt: Date.now() };
+          setSudoku(state);
+          setGameId(state.gameId);
+          setServerError(null);
+          setScreen(state.status === "waiting" ? "waiting" : "sudoku");
+          break;
+        }
+        case events.sudokuWrong: {
+          setSudokuWrong({
+            index: payload.index as number,
+            value: payload.value as number,
+            at: Date.now(),
+          });
+          new Audio("/sounds/notify.mp3").play().catch(() => {});
           break;
         }
         case events.move: {
@@ -152,6 +174,7 @@ export default function Home() {
         }
         case "error": {
           console.error("Server error:", payload.message);
+          setServerError(payload.message as string);
           const rollback = rollbackRef.current;
           if (rollback) {
             setFen(rollback.fen);
@@ -179,6 +202,22 @@ export default function Home() {
     }
   }, [connected, send]);
 
+  // Invite links (/?join=<id>) join automatically once connected
+  useEffect(() => {
+    if (!connected) return;
+    const params = new URLSearchParams(window.location.search);
+    const joinId = params.get("join");
+    if (!joinId) return;
+    send(events.joinRoom, { gameId: joinId });
+    window.history.replaceState(null, "", window.location.pathname);
+  }, [connected, send]);
+
+  const handleLogout = () => {
+    logout();
+    setGameId(null);
+    setScreen("auth");
+  };
+
   if (token && screen === "auth") {
     setScreen("lobby");
   }
@@ -195,98 +234,68 @@ export default function Home() {
         username={username!}
         connected={connected}
         onCreateRoom={(tc) => send(events.createRoom, { timeControl: tc })}
-        onJoinRoom={(id) => send(events.joinRoom, { gameId: id })}
-        onLogout={() => {
-          logout();
+        onCreateSudoku={(difficulty) => send(events.sudokuCreate, { difficulty })}
+        onJoinRoom={(id) => {
+          setServerError(null);
+          send(events.joinRoom, { gameId: id });
+        }}
+        error={serverError}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
+  if (screen === "waiting" && gameId) {
+    return (
+      <Waiting
+        gameId={gameId}
+        subtitle={
+          sudoku
+            ? `Sudoku race · ${sudoku.difficulty}`
+            : `${
+                timeControl
+                  ? `${timeControl.initial / 60_000}+${timeControl.increment / 1000}`
+                  : "No clock"
+              } · you play white`
+        }
+        username={username!}
+        connected={connected}
+        onLogout={handleLogout}
+        onBack={() => {
           setGameId(null);
-          setScreen("auth");
+          setScreen("lobby");
         }}
       />
     );
   }
 
-  if (screen === "waiting") {
+  if (screen === "sudoku" && sudoku) {
     return (
-      <div className="flex min-h-dvh items-center justify-center px-4">
-        <div className="pointer-events-none fixed inset-0 overflow-hidden">
-          <div className="absolute top-1/3 left-1/2 h-[500px] w-[500px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber/5 blur-[120px]" />
-        </div>
-
-        <div className="relative w-full max-w-sm">
-          <Card className="glow-amber border-border/50 bg-card/80 backdrop-blur-sm">
-            <CardHeader className="text-center">
-              <div className="animate-pulse-amber mb-2">
-                <span
-                  className="text-5xl select-none"
-                  style={{
-                    filter: "drop-shadow(0 0 20px oklch(0.78 0.12 75 / 30%))",
-                  }}
-                >
-                  ♔
-                </span>
-              </div>
-              <CardTitle className="text-xl">Waiting for opponent</CardTitle>
-              <CardDescription>
-                Share this room code with your opponent
-              </CardDescription>
-              {timeControl && (
-                <p className="font-mono text-sm text-foreground">
-                  {timeControl.initial / 60_000}+{timeControl.increment / 1000}
-                </p>
-              )}
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Room code display */}
-              <div
-                className="cursor-pointer rounded-lg border border-border/50 bg-background/50 p-4 text-center font-mono text-xs break-all text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground"
-                onClick={() => {
-                  if (gameId) {
-                    navigator.clipboard.writeText(gameId);
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 2000);
-                  }
-                }}
-              >
-                {gameId}
-              </div>
-
-              <Button
-                variant="secondary"
-                className="h-11 w-full"
-                size="lg"
-                onClick={() => {
-                  if (gameId) {
-                    navigator.clipboard.writeText(gameId);
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 2000);
-                  }
-                }}
-              >
-                {copied ? "Copied!" : "Copy Room Code"}
-              </Button>
-
-              <Button
-                variant="ghost"
-                className="w-full text-muted-foreground"
-                onClick={() => {
-                  setGameId(null);
-                  setScreen("lobby");
-                }}
-              >
-                Back to Lobby
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+      <Sudoku
+        game={sudoku}
+        username={username!}
+        connected={connected}
+        wrong={sudokuWrong}
+        onPlace={(index, value) =>
+          send(events.sudokuPlace, { gameId: sudoku.gameId, index, value })
+        }
+        onBackToLobby={() => {
+          setSudoku(null);
+          setGameId(null);
+          setScreen("lobby");
+        }}
+        onLogout={handleLogout}
+      />
     );
   }
 
   if (screen === "game" && gameId) {
     return (
       <Game
-        gameId={gameId}
         username={username!}
+        opponent={opponent}
+        connected={connected}
+        onLogout={handleLogout}
         fen={fen}
         playerColor={playerColor}
         currentTurn={currentTurn}
